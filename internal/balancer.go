@@ -5,21 +5,21 @@ import (
 	"sync"
 )
 
-// Balancer 接口定义了负载均衡器的基本行为
+// Balancer interface defines the basic behavior of a load balancer
 type Balancer interface {
 	Next() (string, error)
 	Add(server string)
 	Remove(server string)
 }
 
-// RoundRobinBalancer 实现轮询负载均衡算法
+// RoundRobinBalancer implements round-robin load balancing algorithm
 type RoundRobinBalancer struct {
 	mu      sync.RWMutex
 	servers []string
 	index   int
 }
 
-// NewRoundRobinBalancer 创建一个新的轮询负载均衡器
+// NewRoundRobinBalancer creates a new round-robin load balancer
 func NewRoundRobinBalancer() *RoundRobinBalancer {
 	return &RoundRobinBalancer{
 		servers: make([]string, 0),
@@ -27,7 +27,7 @@ func NewRoundRobinBalancer() *RoundRobinBalancer {
 	}
 }
 
-// Next 返回下一个可用的服务器地址
+// Next returns the next available server address
 func (b *RoundRobinBalancer) Next() (string, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -41,7 +41,7 @@ func (b *RoundRobinBalancer) Next() (string, error) {
 	return server, nil
 }
 
-// Add 添加一个新的服务器地址
+// Add adds a new server address
 func (b *RoundRobinBalancer) Add(server string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -49,7 +49,7 @@ func (b *RoundRobinBalancer) Add(server string) {
 	b.servers = append(b.servers, server)
 }
 
-// Remove 移除一个服务器地址
+// Remove removes a server address
 func (b *RoundRobinBalancer) Remove(server string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()

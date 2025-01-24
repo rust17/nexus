@@ -69,7 +69,7 @@ func TestConfigLoad_InvalidFile(t *testing.T) {
 }
 
 func TestInvalidConfigFormat(t *testing.T) {
-	// 创建无效的配置文件
+	// Create invalid configuration file
 	tmpFile, err := os.CreateTemp("", "config-*.txt")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)

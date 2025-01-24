@@ -56,7 +56,7 @@ func TestLogger_Levels(t *testing.T) {
 			name:  "FatalLevel",
 			level: internal.LevelFatal,
 			logFunc: func(l *internal.Logger) {
-				l.SetExitFunc(func(int) {}) // 避免退出
+				l.SetExitFunc(func(int) {}) // Prevent exit
 				l.Fatal(testLogMessage)
 			},
 			expectMessage: "[FATAL] " + testLogMessage,
@@ -64,7 +64,7 @@ func TestLogger_Levels(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt // 避免闭包问题
+		tt := tt // Prevent closure issues
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -109,7 +109,7 @@ func TestLogger_LevelFiltering(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt // 避免闭包问题
+		tt := tt // Prevent closure issues
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

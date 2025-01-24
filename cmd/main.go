@@ -13,25 +13,25 @@ import (
 )
 
 func main() {
-	// 加载配置
+	// Load configuration
 	cfg := internal.NewConfig()
 	if err := cfg.LoadFromFile("configs/config.yaml"); err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// 初始化日志
+	// Initialize logger
 	logger := internal.NewLogger(internal.LevelInfo)
 	if cfg.GetLogLevel() == "debug" {
 		logger.SetLevel(internal.LevelDebug)
 	}
 
-	// 初始化负载均衡器
+	// Initialize load balancer
 	balancer := internal.NewRoundRobinBalancer()
 	for _, server := range cfg.GetServers() {
 		balancer.Add(server)
 	}
 
-	// 初始化健康检查
+	// Initialize health checker
 	healthCheckCfg := cfg.GetHealthCheckConfig()
 	healthChecker := internal.NewHealthChecker(healthCheckCfg.Interval, healthCheckCfg.Timeout)
 	for _, server := range cfg.GetServers() {
@@ -40,14 +40,14 @@ func main() {
 	go healthChecker.Start()
 	defer healthChecker.Stop()
 
-	// 初始化反向代理
+	// Initialize reverse proxy
 	proxy := internal.NewProxy(balancer)
 	proxy.SetErrorHandler(func(w http.ResponseWriter, r *http.Request, err error) {
 		logger.Error("Proxy error: %v", err)
 		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
 	})
 
-	// 启动 HTTP 服务器
+	// Start HTTP server
 	server := &http.Server{
 		Addr:    cfg.GetListenAddr(),
 		Handler: proxy,
@@ -60,7 +60,7 @@ func main() {
 		}
 	}()
 
-	// 优雅关闭
+	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit

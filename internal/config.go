@@ -11,29 +11,29 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config 结构体包含所有配置项
+// Config struct contains all configuration items
 type Config struct {
 	mu sync.RWMutex
 
-	// 服务器配置
+	// Server configuration
 	ListenAddr string `yaml:"listen_addr" json:"listen_addr"`
 
-	// 负载均衡配置
+	// Load balancer configuration
 	BalancerType string            `yaml:"balancer_type" json:"balancer_type"`
 	Servers      []string          `yaml:"servers" json:"servers"`
 	HealthCheck  HealthCheckConfig `yaml:"health_check" json:"health_check"`
 
-	// 日志配置
+	// Log configuration
 	LogLevel string `yaml:"log_level" json:"log_level"`
 }
 
-// HealthCheckConfig 健康检查配置
+// HealthCheckConfig health check configuration
 type HealthCheckConfig struct {
 	Interval time.Duration `yaml:"interval" json:"interval"`
 	Timeout  time.Duration `yaml:"timeout" json:"timeout"`
 }
 
-// NewConfig 创建一个新的配置实例
+// NewConfig creates a new configuration instance
 func NewConfig() *Config {
 	return &Config{
 		ListenAddr:   ":8080",
@@ -46,7 +46,7 @@ func NewConfig() *Config {
 	}
 }
 
-// LoadFromFile 从文件加载配置
+// LoadFromFile loads configuration from a file
 func (c *Config) LoadFromFile(path string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -56,7 +56,7 @@ func (c *Config) LoadFromFile(path string) error {
 		return err
 	}
 
-	// 根据文件扩展名决定使用 YAML 还是 JSON
+	// Decide whether to use YAML or JSON based on the file extension
 	switch filepath.Ext(path) {
 	case ".yaml", ".yml":
 		return yaml.Unmarshal(data, c)
@@ -67,7 +67,7 @@ func (c *Config) LoadFromFile(path string) error {
 	}
 }
 
-// SaveToFile 保存配置到文件
+// SaveToFile saves configuration to a file
 func (c *Config) SaveToFile(path string) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -75,7 +75,7 @@ func (c *Config) SaveToFile(path string) error {
 	var data []byte
 	var err error
 
-	// 根据文件扩展名决定使用 YAML 还是 JSON
+	// Decide whether to use YAML or JSON based on the file extension
 	switch filepath.Ext(path) {
 	case ".yaml", ".yml":
 		data, err = yaml.Marshal(c)
@@ -92,7 +92,7 @@ func (c *Config) SaveToFile(path string) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-// GetListenAddr 获取监听地址
+// GetListenAddr gets the listening address
 func (c *Config) GetListenAddr() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -100,7 +100,7 @@ func (c *Config) GetListenAddr() string {
 	return c.ListenAddr
 }
 
-// GetBalancerType 获取负载均衡器类型
+// GetBalancerType gets the load balancer type
 func (c *Config) GetBalancerType() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -108,7 +108,7 @@ func (c *Config) GetBalancerType() string {
 	return c.BalancerType
 }
 
-// GetServers 获取服务器列表
+// GetServers gets the server list
 func (c *Config) GetServers() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -116,7 +116,7 @@ func (c *Config) GetServers() []string {
 	return c.Servers
 }
 
-// GetHealthCheckConfig 获取健康检查配置
+// GetHealthCheckConfig gets the health check configuration
 func (c *Config) GetHealthCheckConfig() HealthCheckConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -124,7 +124,7 @@ func (c *Config) GetHealthCheckConfig() HealthCheckConfig {
 	return c.HealthCheck
 }
 
-// GetLogLevel 获取日志级别
+// GetLogLevel gets the log level
 func (c *Config) GetLogLevel() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

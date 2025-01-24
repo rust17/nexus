@@ -49,21 +49,21 @@ func TestHealthChecker(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt // 避免闭包问题
+		tt := tt // Prevent closure issues
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			// 创建测试服务器
+			// Create test server
 			ts := httptest.NewServer(tt.serverHandler)
 			defer ts.Close()
 
-			// 创建健康检查器
+			// Create health checker
 			checker := internal.NewHealthChecker(healthCheckInterval, healthCheckTimeout)
 			checker.AddServer(ts.URL)
 			go checker.Start()
 			defer checker.Stop()
 
-			// 使用轮询方式等待健康检查结果
+			// Wait for health check results using polling
 			var healthy bool
 			for i := 0; i < pollCount; i++ {
 				if checker.IsHealthy(ts.URL) == tt.expectHealthy {
@@ -83,22 +83,22 @@ func TestHealthChecker(t *testing.T) {
 func TestHealthChecker_RemoveServer(t *testing.T) {
 	t.Parallel()
 
-	// 创建测试服务器
+	// Create test server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer ts.Close()
 
-	// 创建健康检查器
+	// Create health checker
 	checker := internal.NewHealthChecker(healthCheckInterval, healthCheckTimeout)
 	checker.AddServer(ts.URL)
 	go checker.Start()
 	defer checker.Stop()
 
-	// 等待健康检查执行
+	// Wait for health check execution
 	time.Sleep(200 * time.Millisecond)
 
-	// 移除服务器
+	// Remove server
 	checker.RemoveServer(ts.URL)
 	if checker.IsHealthy(ts.URL) {
 		t.Error("Removed server should not be considered healthy")

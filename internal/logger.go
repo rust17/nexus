@@ -7,15 +7,15 @@ import (
 	"sync"
 )
 
-// Logger 结构体封装日志功能
+// Logger struct encapsulates logging functionality
 type Logger struct {
 	mu       sync.RWMutex
 	logger   *log.Logger
 	level    LogLevel
-	exitFunc func(int) // 添加退出函数字段
+	exitFunc func(int) // Add exit function field
 }
 
-// LogLevel 定义日志级别类型
+// LogLevel defines the type for log levels
 type LogLevel int
 
 const (
@@ -26,16 +26,16 @@ const (
 	LevelFatal
 )
 
-// NewLogger 创建一个新的日志实例
+// NewLogger creates a new logger instance
 func NewLogger(level LogLevel) *Logger {
 	return &Logger{
 		logger:   log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile),
 		level:    level,
-		exitFunc: os.Exit, // 默认使用 os.Exit
+		exitFunc: os.Exit, // Default to os.Exit
 	}
 }
 
-// SetLevel 设置日志级别
+// SetLevel sets the logging level
 func (l *Logger) SetLevel(level LogLevel) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -43,7 +43,7 @@ func (l *Logger) SetLevel(level LogLevel) {
 	l.level = level
 }
 
-// SetOutput 设置日志输出目标
+// SetOutput sets the logging output destination
 func (l *Logger) SetOutput(w io.Writer) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -51,7 +51,7 @@ func (l *Logger) SetOutput(w io.Writer) {
 	l.logger.SetOutput(w)
 }
 
-// SetExitFunc 设置退出函数
+// SetExitFunc sets the exit function
 func (l *Logger) SetExitFunc(f func(int)) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -59,7 +59,7 @@ func (l *Logger) SetExitFunc(f func(int)) {
 	l.exitFunc = f
 }
 
-// Debug 输出调试日志
+// Debug outputs debug level logs
 func (l *Logger) Debug(format string, v ...interface{}) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -69,7 +69,7 @@ func (l *Logger) Debug(format string, v ...interface{}) {
 	}
 }
 
-// Info 输出信息日志
+// Info outputs information level logs
 func (l *Logger) Info(format string, v ...interface{}) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -79,7 +79,7 @@ func (l *Logger) Info(format string, v ...interface{}) {
 	}
 }
 
-// Warn 输出警告日志
+// Warn outputs warning level logs
 func (l *Logger) Warn(format string, v ...interface{}) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -89,7 +89,7 @@ func (l *Logger) Warn(format string, v ...interface{}) {
 	}
 }
 
-// Error 输出错误日志
+// Error outputs error level logs
 func (l *Logger) Error(format string, v ...interface{}) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -99,13 +99,13 @@ func (l *Logger) Error(format string, v ...interface{}) {
 	}
 }
 
-// Fatal 输出致命错误日志并退出程序
+// Fatal outputs fatal error logs and exits the program
 func (l *Logger) Fatal(format string, v ...interface{}) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
 	if l.level <= LevelFatal {
 		l.logger.Printf("[FATAL] "+format, v...)
-		l.exitFunc(1) // 使用自定义退出函数
+		l.exitFunc(1) // Use custom exit function
 	}
 }

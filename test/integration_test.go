@@ -10,7 +10,7 @@ import (
 )
 
 func TestIntegration(t *testing.T) {
-	// 创建测试后端服务器
+	// Create test backend servers
 	backend1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Response from backend 1"))
@@ -23,20 +23,20 @@ func TestIntegration(t *testing.T) {
 	}))
 	defer backend2.Close()
 
-	// 创建配置
+	// Create configuration
 	cfg := internal.NewConfig()
 	cfg.Servers = []string{backend1.URL, backend2.URL}
 	cfg.HealthCheck.Interval = 100 * time.Millisecond
 	cfg.HealthCheck.Timeout = 1 * time.Second
 
-	// 初始化负载均衡器
+	// Initialize load balancer
 	balancer := internal.NewRoundRobinBalancer()
 	for _, server := range cfg.GetServers() {
 		balancer.Add(server)
 	}
-	balancer.Next() // 确保从第一个服务器开始
+	balancer.Next() // Ensure starting from the first server
 
-	// 初始化健康检查
+	// Initialize health checker
 	healthChecker := internal.NewHealthChecker(cfg.GetHealthCheckConfig().Interval, cfg.GetHealthCheckConfig().Timeout)
 	for _, server := range cfg.GetServers() {
 		healthChecker.AddServer(server)
@@ -44,10 +44,10 @@ func TestIntegration(t *testing.T) {
 	go healthChecker.Start()
 	defer healthChecker.Stop()
 
-	// 初始化反向代理
+	// Initialize reverse proxy
 	proxy := internal.NewProxy(balancer)
 
-	t.Run("单个请求应返回成功状态码", func(t *testing.T) {
+	t.Run("Single request should return success status code", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		w := httptest.NewRecorder()
 
@@ -55,22 +55,22 @@ func TestIntegration(t *testing.T) {
 
 		resp := w.Result()
 		if resp.StatusCode != http.StatusOK {
-			t.Errorf("期望状态码 %d, 实际得到 %d", http.StatusOK, resp.StatusCode)
+			t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
 		}
 	})
 
-	t.Run("负载均衡应正确轮询后端服务器", func(t *testing.T) {
+	t.Run("Load balancer should correctly round-robin backend servers", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 
-		// 定义测试用例
+		// Define test cases
 		testCases := []struct {
 			name     string
 			expected string
 		}{
-			{"第一次请求", "Response from backend 1"},
-			{"第二次请求", "Response from backend 2"},
-			{"第三次请求", "Response from backend 1"},
-			{"第四次请求", "Response from backend 2"},
+			{"First Request", "Response from backend 1"},
+			{"Second Request", "Response from backend 2"},
+			{"Third Request", "Response from backend 1"},
+			{"Fourth Request", "Response from backend 2"},
 		}
 
 		for _, tc := range testCases {
@@ -80,7 +80,7 @@ func TestIntegration(t *testing.T) {
 
 				got := w.Body.String()
 				if got != tc.expected {
-					t.Errorf("期望响应 %q, 实际得到 %q", tc.expected, got)
+					t.Errorf("Expected response %q, got %q", tc.expected, got)
 				}
 			})
 		}

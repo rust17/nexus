@@ -11,25 +11,25 @@ import (
 )
 
 func TestStress(t *testing.T) {
-	t.Parallel() // 标记测试可以并行执行
+	t.Parallel() // Mark test as parallel executable
 
-	// 创建多个测试后端服务器
+	// Create multiple test backend servers
 	backends := make([]*httptest.Server, 5)
 	for i := range backends {
 		backends[i] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			time.Sleep(10 * time.Millisecond) // 模拟处理时间
+			time.Sleep(10 * time.Millisecond) // Simulate processing time
 			w.WriteHeader(http.StatusOK)
 		}))
-		t.Cleanup(func() { backends[i].Close() }) // 使用 t.Cleanup 替代 defer
+		t.Cleanup(func() { backends[i].Close() }) // Use t.Cleanup instead of defer
 	}
 
-	// 初始化负载均衡器
+	// Initialize load balancer
 	balancer := internal.NewRoundRobinBalancer()
 	for _, backend := range backends {
 		balancer.Add(backend.URL)
 	}
 
-	// 初始化健康检查
+	// Initialize health checker
 	healthChecker := internal.NewHealthChecker(1*time.Second, 500*time.Millisecond)
 	for _, backend := range backends {
 		healthChecker.AddServer(backend.URL)
@@ -37,14 +37,14 @@ func TestStress(t *testing.T) {
 	go healthChecker.Start()
 	t.Cleanup(func() { healthChecker.Stop() })
 
-	// 初始化反向代理
+	// Initialize reverse proxy
 	proxy := internal.NewProxy(balancer)
 
-	// 启动代理服务器
+	// Start proxy server
 	proxyServer := httptest.NewServer(proxy)
 	t.Cleanup(func() { proxyServer.Close() })
 
-	// 定义测试场景
+	// Define test scenarios
 	testCases := []struct {
 		name              string
 		concurrency       int
@@ -56,18 +56,18 @@ func TestStress(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc // 捕获循环变量
+		tc := tc // Capture loop variable
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			// 等待组
+			// Wait group
 			var wg sync.WaitGroup
 			wg.Add(tc.concurrency)
 
-			// 启动时间
+			// Start time
 			start := time.Now()
 
-			// 启动并发客户端
+			// Launch concurrent clients
 			for i := 0; i < tc.concurrency; i++ {
 				go func() {
 					defer wg.Done()
@@ -80,10 +80,10 @@ func TestStress(t *testing.T) {
 				}()
 			}
 
-			// 等待所有请求完成
+			// Wait for all requests to complete
 			wg.Wait()
 
-			// 计算总耗时
+			// Calculate total duration
 			duration := time.Since(start)
 			totalRequests := tc.concurrency * tc.requestsPerClient
 			t.Logf("Total requests: %d", totalRequests)
@@ -93,9 +93,9 @@ func TestStress(t *testing.T) {
 	}
 }
 
-// makeRequest 是一个辅助函数，用于发送 HTTP 请求
+// makeRequest is a helper function for sending HTTP requests
 func makeRequest(t *testing.T, client *http.Client, url string) error {
-	t.Helper() // 标记为辅助函数
+	t.Helper() // Mark as helper function
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -115,7 +115,7 @@ func makeRequest(t *testing.T, client *http.Client, url string) error {
 	return nil
 }
 
-// httpError 是一个自定义错误类型，用于处理 HTTP 错误
+// httpError is a custom error type for handling HTTP errors
 type httpError struct {
 	statusCode int
 }

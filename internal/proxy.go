@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-// Proxy 结构体表示反向代理
+// Proxy struct represents a reverse proxy
 type Proxy struct {
 	mu           sync.RWMutex
 	balancer     Balancer
@@ -15,7 +15,7 @@ type Proxy struct {
 	errorHandler func(http.ResponseWriter, *http.Request, error)
 }
 
-// NewProxy 创建一个新的反向代理实例
+// NewProxy creates a new reverse proxy instance
 func NewProxy(balancer Balancer) *Proxy {
 	return &Proxy{
 		balancer:  balancer,
@@ -23,7 +23,7 @@ func NewProxy(balancer Balancer) *Proxy {
 	}
 }
 
-// ServeHTTP 实现 http.Handler 接口
+// ServeHTTP implements the http.Handler interface
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	target, err := p.balancer.Next()
 	if err != nil {
@@ -42,7 +42,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	proxy.ServeHTTP(w, r)
 }
 
-// SetTransport 设置自定义的 Transport
+// SetTransport sets a custom Transport
 func (p *Proxy) SetTransport(transport http.RoundTripper) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -50,7 +50,7 @@ func (p *Proxy) SetTransport(transport http.RoundTripper) {
 	p.transport = transport
 }
 
-// SetErrorHandler 设置自定义的错误处理函数
+// SetErrorHandler sets a custom error handler function
 func (p *Proxy) SetErrorHandler(handler func(http.ResponseWriter, *http.Request, error)) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -58,7 +58,7 @@ func (p *Proxy) SetErrorHandler(handler func(http.ResponseWriter, *http.Request,
 	p.errorHandler = handler
 }
 
-// handleError 处理代理过程中的错误
+// handleError handles errors during the proxy process
 func (p *Proxy) handleError(w http.ResponseWriter, r *http.Request, err error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

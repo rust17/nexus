@@ -11,7 +11,7 @@ func TestRoundRobinBalancer(t *testing.T) {
 		name          string
 		servers       []string
 		expectedOrder []string
-		removeServer  string // 可选：要移除的服务器
+		removeServer  string // Optional: server to be removed
 	}{
 		{
 			name: "Basic Round Robin",
@@ -41,11 +41,11 @@ func TestRoundRobinBalancer(t *testing.T) {
 			},
 			removeServer: "http://server2:8080",
 		},
-		// 可以添加更多测试用例，例如不同的服务器顺序，更多轮询次数等
+		// More test cases can be added, such as different server orders, more polling rounds, etc.
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) { // 使用 t.Run 区分每个子测试用例
+		t.Run(tc.name, func(t *testing.T) { // Using t.Run to distinguish each sub-test case
 			balancer := internal.NewRoundRobinBalancer()
 			for _, server := range tc.servers {
 				balancer.Add(server)
@@ -66,7 +66,7 @@ func TestRoundRobinBalancer(t *testing.T) {
 			}
 
 			if tc.removeServer != "" {
-				for i := 0; i < 3; i++ { // 多次调用 Next 确保移除的服务器不会再出现
+				for i := 0; i < 3; i++ { // Call Next multiple times to ensure removed server doesn't appear
 					server, err := balancer.Next()
 					if err != nil {
 						t.Fatalf("Unexpected error after remove: %v", err)

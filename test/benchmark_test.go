@@ -10,23 +10,23 @@ import (
 )
 
 func BenchmarkProxy(b *testing.B) {
-	// 创建测试后端服务器
+	// Create test backend server
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer backend.Close()
 
-	// 初始化负载均衡器
+	// Initialize load balancer
 	balancer := internal.NewRoundRobinBalancer()
 	balancer.Add(backend.URL)
 
-	// 初始化反向代理
+	// Initialize reverse proxy
 	proxy := internal.NewProxy(balancer)
 
-	// 创建测试请求
+	// Create test request
 	req := httptest.NewRequest("GET", "/", nil)
 
-	b.ReportAllocs() // 报告内存分配
+	b.ReportAllocs() // Report memory allocations
 	b.ResetTimer()
 
 	b.Run("Sequential", func(b *testing.B) {
@@ -47,7 +47,7 @@ func BenchmarkProxy(b *testing.B) {
 }
 
 func BenchmarkProxyWithMultipleBackends(b *testing.B) {
-	// 创建多个测试后端服务器
+	// Create multiple test backend servers
 	backends := make([]*httptest.Server, 10)
 	for i := range backends {
 		backends[i] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -56,16 +56,16 @@ func BenchmarkProxyWithMultipleBackends(b *testing.B) {
 		defer backends[i].Close()
 	}
 
-	// 初始化负载均衡器
+	// Initialize load balancer
 	balancer := internal.NewRoundRobinBalancer()
 	for _, backend := range backends {
 		balancer.Add(backend.URL)
 	}
 
-	// 初始化反向代理
+	// Initialize reverse proxy
 	proxy := internal.NewProxy(balancer)
 
-	// 创建测试请求
+	// Create test request
 	req := httptest.NewRequest("GET", "/", nil)
 
 	b.ReportAllocs()
@@ -89,26 +89,26 @@ func BenchmarkProxyWithMultipleBackends(b *testing.B) {
 }
 
 func BenchmarkProxyWithHealthCheck(b *testing.B) {
-	// 创建测试后端服务器
+	// Create test backend server
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer backend.Close()
 
-	// 初始化负载均衡器
+	// Initialize load balancer
 	balancer := internal.NewRoundRobinBalancer()
 	balancer.Add(backend.URL)
 
-	// 初始化健康检查
+	// Initialize health checker
 	healthChecker := internal.NewHealthChecker(10*time.Second, 1*time.Second)
 	healthChecker.AddServer(backend.URL)
 	go healthChecker.Start()
 	defer healthChecker.Stop()
 
-	// 初始化反向代理
+	// Initialize reverse proxy
 	proxy := internal.NewProxy(balancer)
 
-	// 创建测试请求
+	// Create test request
 	req := httptest.NewRequest("GET", "/", nil)
 
 	b.ReportAllocs()

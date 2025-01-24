@@ -1,19 +1,19 @@
-# 代理服务器监听地址
+# Proxy server listening address
 listen_addr: ":8080"
 
-# 负载均衡器类型 (round_robin, least_connections)
+# Load balancer type (round_robin, least_connections)
 balancer_type: "round_robin"
 
-# 后端服务器列表
+# Backend server list
 servers:
   - "http://localhost:8081"
   - "http://localhost:8082"
   - "http://localhost:8083"
 
-# 健康检查配置
+# Health check configuration
 health_check:
-  interval: 10s  # 检查间隔
-  timeout: 2s    # 超时时间
+  interval: 10s  # Check interval
+  timeout: 2s    # Timeout duration
 
-# 日志级别 (debug, info, warn, error, fatal)
+# Log level (debug, info, warn, error, fatal)
 log_level: "info"

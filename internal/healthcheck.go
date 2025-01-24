@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// HealthChecker 结构体负责健康检查
+// HealthChecker is responsible for health checking
 type HealthChecker struct {
 	mu       sync.RWMutex
 	servers  map[string]bool
@@ -16,7 +16,7 @@ type HealthChecker struct {
 	stopChan chan struct{}
 }
 
-// NewHealthChecker 创建一个新的健康检查器
+// NewHealthChecker creates a new health checker
 func NewHealthChecker(interval, timeout time.Duration) *HealthChecker {
 	return &HealthChecker{
 		servers:  make(map[string]bool),
@@ -26,7 +26,7 @@ func NewHealthChecker(interval, timeout time.Duration) *HealthChecker {
 	}
 }
 
-// AddServer 添加一个需要健康检查的服务器
+// AddServer adds a server for health checking
 func (h *HealthChecker) AddServer(server string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -34,7 +34,7 @@ func (h *HealthChecker) AddServer(server string) {
 	h.servers[server] = true
 }
 
-// RemoveServer 移除一个服务器
+// RemoveServer removes a server from health checking
 func (h *HealthChecker) RemoveServer(server string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -42,7 +42,7 @@ func (h *HealthChecker) RemoveServer(server string) {
 	delete(h.servers, server)
 }
 
-// IsHealthy 检查服务器是否健康
+// IsHealthy checks if a server is healthy
 func (h *HealthChecker) IsHealthy(server string) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -50,7 +50,7 @@ func (h *HealthChecker) IsHealthy(server string) bool {
 	return h.servers[server]
 }
 
-// Start 开始健康检查
+// Start begins the health checking process
 func (h *HealthChecker) Start() {
 	ticker := time.NewTicker(h.interval)
 	defer ticker.Stop()
@@ -65,12 +65,12 @@ func (h *HealthChecker) Start() {
 	}
 }
 
-// Stop 停止健康检查
+// Stop terminates the health checking process
 func (h *HealthChecker) Stop() {
 	close(h.stopChan)
 }
 
-// checkAllServers 检查所有服务器的健康状态
+// checkAllServers checks the health status of all servers
 func (h *HealthChecker) checkAllServers() {
 	h.mu.RLock()
 	servers := make([]string, 0, len(h.servers))
@@ -90,7 +90,7 @@ func (h *HealthChecker) checkAllServers() {
 	wg.Wait()
 }
 
-// checkServer 检查单个服务器的健康状态
+// checkServer checks the health status of a single server
 func (h *HealthChecker) checkServer(server string) {
 	ctx, cancel := context.WithTimeout(context.Background(), h.timeout)
 	defer cancel()
@@ -110,7 +110,7 @@ func (h *HealthChecker) checkServer(server string) {
 	h.updateServerStatus(server, true)
 }
 
-// updateServerStatus 更新服务器状态
+// updateServerStatus updates the server's health status
 func (h *HealthChecker) updateServerStatus(server string, healthy bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()

@@ -33,14 +33,14 @@ func TestProxy_ServeHTTP(t *testing.T) {
 		},
 		{
 			name:           "NoBackendAvailable",
-			backendHandler: nil, // 不创建后端服务器
+			backendHandler: nil, // Do not create backend server
 			expectStatus:   http.StatusServiceUnavailable,
 			expectBody:     "Service unavailable",
 		},
 	}
 
 	for _, tt := range tests {
-		tt := tt // 避免闭包问题
+		tt := tt // Prevent closure issues
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

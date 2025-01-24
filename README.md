@@ -16,7 +16,7 @@ graph LR
     Configuration(config.yaml) --> NexusProxy
 
     style NexusProxy fill:#f9f,stroke:#333,stroke-width:2px
-    style LoadBalancer fill:#ccf,stroke:#333,stroke-width:2px
+    style LoadBalancer fill:#ff9966,stroke:#333,stroke-width:2px
     style HealthChecker fill:#cfc,stroke:#333,stroke-width:2px
     style BackendServer1 fill:#eee,stroke:#333,stroke-width:2px
     style BackendServer2 fill:#eee,stroke:#333,stroke-width:2px

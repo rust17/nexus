@@ -20,11 +20,17 @@ type Config struct {
 
 	// Load balancer configuration
 	BalancerType string            `yaml:"balancer_type" json:"balancer_type"`
-	Servers      []string          `yaml:"servers" json:"servers"`
+	Servers      []ServerConfig    `yaml:"servers" json:"servers"`
 	HealthCheck  HealthCheckConfig `yaml:"health_check" json:"health_check"`
 
 	// Log configuration
 	LogLevel string `yaml:"log_level" json:"log_level"`
+}
+
+// ServerConfig represents a server with its weight
+type ServerConfig struct {
+	Address string `yaml:"address" json:"address"`
+	Weight  int    `yaml:"weight" json:"weight"`
 }
 
 // HealthCheckConfig health check configuration
@@ -109,7 +115,7 @@ func (c *Config) GetBalancerType() string {
 }
 
 // GetServers gets the server list
-func (c *Config) GetServers() []string {
+func (c *Config) GetServers() []ServerConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 

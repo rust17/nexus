@@ -23,66 +23,103 @@ func TestIntegration(t *testing.T) {
 	}))
 	defer backend2.Close()
 
-	// Create configuration
-	cfg := internal.NewConfig()
-	cfg.Servers = []string{backend1.URL, backend2.URL}
-	cfg.HealthCheck.Interval = 100 * time.Millisecond
-	cfg.HealthCheck.Timeout = 1 * time.Second
-
-	// Initialize load balancer
-	balancer := internal.NewRoundRobinBalancer()
-	for _, server := range cfg.GetServers() {
-		balancer.Add(server)
+	// Define test cases for different load balancing algorithms
+	testCases := []struct {
+		name          string
+		balancerType  string
+		servers       []internal.ServerConfig
+		expectedOrder []string
+	}{
+		{
+			name:         "Round Robin",
+			balancerType: "round_robin",
+			servers: []internal.ServerConfig{
+				{Address: backend1.URL, Weight: 1},
+				{Address: backend2.URL, Weight: 1},
+			},
+			expectedOrder: []string{
+				"Response from backend 1",
+				"Response from backend 2",
+				"Response from backend 1",
+				"Response from backend 2",
+			},
+		},
+		{
+			name:         "Weighted Round Robin",
+			balancerType: "weighted_round_robin",
+			servers: []internal.ServerConfig{
+				{Address: backend1.URL, Weight: 2},
+				{Address: backend2.URL, Weight: 1},
+			},
+			expectedOrder: []string{
+				"Response from backend 1",
+				"Response from backend 1",
+				"Response from backend 2",
+				"Response from backend 1",
+				"Response from backend 1",
+				"Response from backend 2",
+			},
+		},
+		{
+			name:         "Least Connections",
+			balancerType: "least_connections",
+			servers: []internal.ServerConfig{
+				{Address: backend1.URL, Weight: 1},
+				{Address: backend2.URL, Weight: 1},
+			},
+			expectedOrder: []string{
+				"Response from backend 1",
+				"Response from backend 2",
+				"Response from backend 1",
+				"Response from backend 2",
+			},
+		},
 	}
-	balancer.Next() // Ensure starting from the first server
 
-	// Initialize health checker
-	healthChecker := internal.NewHealthChecker(cfg.GetHealthCheckConfig().Interval, cfg.GetHealthCheckConfig().Timeout)
-	for _, server := range cfg.GetServers() {
-		healthChecker.AddServer(server)
-	}
-	go healthChecker.Start()
-	defer healthChecker.Stop()
+	for _, tc := range testCases {
+		tc := tc // Prevent closure issues
+		t.Run(tc.name, func(t *testing.T) {
+			// Create configuration
+			cfg := internal.NewConfig()
+			cfg.BalancerType = tc.balancerType
+			cfg.Servers = tc.servers
+			cfg.HealthCheck.Interval = 100 * time.Millisecond
+			cfg.HealthCheck.Timeout = 1 * time.Second
 
-	// Initialize reverse proxy
-	proxy := internal.NewProxy(balancer)
+			// Initialize load balancer
+			balancer := internal.NewBalancer(tc.balancerType)
+			for _, server := range cfg.GetServers() {
+				if cfg.GetBalancerType() == "weighted_round_robin" {
+					if wrr, ok := balancer.(*internal.WeightedRoundRobinBalancer); ok {
+						wrr.AddWithWeight(server.Address, server.Weight)
+					}
+				} else {
+					balancer.Add(server.Address)
+				}
+			}
 
-	t.Run("Single request should return success status code", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/", nil)
-		w := httptest.NewRecorder()
+			// Initialize health checker
+			healthChecker := internal.NewHealthChecker(cfg.GetHealthCheckConfig().Interval, cfg.GetHealthCheckConfig().Timeout)
+			for _, server := range cfg.GetServers() {
+				healthChecker.AddServer(server.Address)
+			}
+			go healthChecker.Start()
+			defer healthChecker.Stop()
 
-		proxy.ServeHTTP(w, req)
+			// Initialize reverse proxy
+			proxy := internal.NewProxy(balancer)
 
-		resp := w.Result()
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
-		}
-	})
-
-	t.Run("Load balancer should correctly round-robin backend servers", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/", nil)
-
-		// Define test cases
-		testCases := []struct {
-			name     string
-			expected string
-		}{
-			{"First Request", "Response from backend 1"},
-			{"Second Request", "Response from backend 2"},
-			{"Third Request", "Response from backend 1"},
-			{"Fourth Request", "Response from backend 2"},
-		}
-
-		for _, tc := range testCases {
-			t.Run(tc.name, func(t *testing.T) {
+			// Test request routing
+			req := httptest.NewRequest("GET", "/", nil)
+			for i, expected := range tc.expectedOrder {
 				w := httptest.NewRecorder()
 				proxy.ServeHTTP(w, req)
 
 				got := w.Body.String()
-				if got != tc.expected {
-					t.Errorf("Expected response %q, got %q", tc.expected, got)
+				if got != expected {
+					t.Errorf("Test case %s, iteration %d failed: expected %q, got %q", tc.name, i, expected, got)
 				}
-			})
-		}
-	})
+			}
+		})
+	}
 }

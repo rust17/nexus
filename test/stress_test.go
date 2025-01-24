@@ -24,7 +24,7 @@ func TestStress(t *testing.T) {
 	}
 
 	// Initialize load balancer
-	balancer := internal.NewRoundRobinBalancer()
+	balancer := internal.NewBalancer("round_robin")
 	for _, backend := range backends {
 		balancer.Add(backend.URL)
 	}

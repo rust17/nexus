@@ -26,16 +26,22 @@ func main() {
 	}
 
 	// Initialize load balancer
-	balancer := internal.NewRoundRobinBalancer()
+	balancer := internal.NewBalancer(cfg.GetBalancerType())
 	for _, server := range cfg.GetServers() {
-		balancer.Add(server)
+		if cfg.GetBalancerType() == "weighted_round_robin" {
+			if wrr, ok := balancer.(*internal.WeightedRoundRobinBalancer); ok {
+				wrr.AddWithWeight(server.Address, server.Weight)
+			}
+		} else {
+			balancer.Add(server.Address)
+		}
 	}
 
 	// Initialize health checker
 	healthCheckCfg := cfg.GetHealthCheckConfig()
 	healthChecker := internal.NewHealthChecker(healthCheckCfg.Interval, healthCheckCfg.Timeout)
 	for _, server := range cfg.GetServers() {
-		healthChecker.AddServer(server)
+		healthChecker.AddServer(server.Address)
 	}
 	go healthChecker.Start()
 	defer healthChecker.Stop()

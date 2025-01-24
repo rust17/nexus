@@ -1,14 +1,17 @@
 # Proxy server listening address
 listen_addr: ":8080"
 
-# Load balancer type (round_robin, least_connections)
-balancer_type: "round_robin"
+# Load balancer type (round_robin, least_connections, weighted_round_robin)
+balancer_type: "weighted_round_robin"
 
 # Backend server list
 servers:
-  - "http://localhost:8081"
-  - "http://localhost:8082"
-  - "http://localhost:8083"
+  - address: "http://localhost:8081"
+    weight: 3
+  - address: "http://localhost:8082"
+    weight: 2
+  - address: "http://localhost:8083"
+    weight: 1
 
 # Health check configuration
 health_check:

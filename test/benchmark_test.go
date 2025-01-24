@@ -17,7 +17,7 @@ func BenchmarkProxy(b *testing.B) {
 	defer backend.Close()
 
 	// Initialize load balancer
-	balancer := internal.NewRoundRobinBalancer()
+	balancer := internal.NewBalancer("round_robin")
 	balancer.Add(backend.URL)
 
 	// Initialize reverse proxy
@@ -57,7 +57,7 @@ func BenchmarkProxyWithMultipleBackends(b *testing.B) {
 	}
 
 	// Initialize load balancer
-	balancer := internal.NewRoundRobinBalancer()
+	balancer := internal.NewBalancer("round_robin")
 	for _, backend := range backends {
 		balancer.Add(backend.URL)
 	}
@@ -96,7 +96,7 @@ func BenchmarkProxyWithHealthCheck(b *testing.B) {
 	defer backend.Close()
 
 	// Initialize load balancer
-	balancer := internal.NewRoundRobinBalancer()
+	balancer := internal.NewBalancer("round_robin")
 	balancer.Add(backend.URL)
 
 	// Initialize health checker

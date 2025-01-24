@@ -26,7 +26,7 @@ func NewHealthChecker(interval, timeout time.Duration) *HealthChecker {
 	}
 }
 
-// AddServer adds a server for health checking
+// AddServer adds a server to be health checked
 func (h *HealthChecker) AddServer(server string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -97,21 +97,21 @@ func (h *HealthChecker) checkServer(server string) {
 
 	req, err := http.NewRequestWithContext(ctx, "GET", server+"/health", nil)
 	if err != nil {
-		h.updateServerStatus(server, false)
+		h.UpdateServerStatus(server, false)
 		return
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
-		h.updateServerStatus(server, false)
+		h.UpdateServerStatus(server, false)
 		return
 	}
 
-	h.updateServerStatus(server, true)
+	h.UpdateServerStatus(server, true)
 }
 
-// updateServerStatus updates the server's health status
-func (h *HealthChecker) updateServerStatus(server string, healthy bool) {
+// UpdateServerStatus updates the server's health status
+func (h *HealthChecker) UpdateServerStatus(server string, healthy bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 

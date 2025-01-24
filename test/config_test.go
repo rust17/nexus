@@ -16,8 +16,10 @@ func TestConfigLoad_ValidConfig(t *testing.T) {
 listen_addr: ":8080"
 balancer_type: "round_robin"
 servers:
-  - "http://localhost:8081"
-  - "http://localhost:8082"
+  - address: "http://localhost:8081"
+    weight: 1
+  - address: "http://localhost:8082"
+    weight: 1
 health_check:
   interval: 10s
   timeout: 2s
@@ -40,7 +42,7 @@ log_level: "debug"
 	}
 
 	servers := cfg.GetServers()
-	if len(servers) != 2 || servers[0] != "http://localhost:8081" || servers[1] != "http://localhost:8082" {
+	if len(servers) != 2 || servers[0].Address != "http://localhost:8081" || servers[1].Address != "http://localhost:8082" {
 		t.Errorf("Unexpected servers list: %v", servers)
 	}
 

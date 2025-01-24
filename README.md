@@ -2,6 +2,31 @@
 
 **Nexus** is a lightweight, high-performance reverse proxy and load balancer written in Go. It aims to provide a fast, reliable, and scalable solution for managing and routing network traffic.
 
+```mermaid
+graph LR
+    Client --> NexusProxy(Nexus Proxy)
+    NexusProxy --> LoadBalancer(Load Balancer)
+    LoadBalancer --> BackendServer1(Backend Server 1)
+    LoadBalancer --> BackendServer2(Backend Server 2)
+    LoadBalancer --> BackendServerN(Backend Server N)
+    NexusProxy --> HealthChecker(Health Checker)
+    HealthChecker --> BackendServer1
+    HealthChecker --> BackendServer2
+    HealthChecker --> BackendServerN
+    Configuration(config.yaml) --> NexusProxy
+
+    style NexusProxy fill:#f9f,stroke:#333,stroke-width:2px
+    style LoadBalancer fill:#ccf,stroke:#333,stroke-width:2px
+    style HealthChecker fill:#cfc,stroke:#333,stroke-width:2px
+    style BackendServer1 fill:#eee,stroke:#333,stroke-width:2px
+    style BackendServer2 fill:#eee,stroke:#333,stroke-width:2px
+    style BackendServerN fill:#eee,stroke:#333,stroke-width:2px
+    style Configuration fill:#ffc,stroke:#333,stroke-width:2px
+
+    classDef component fill:#f9f,stroke:#333,stroke-width:2px
+    class NexusProxy,LoadBalancer,HealthChecker,BackendServer1,BackendServer2,BackendServerN component
+```
+
 ## Features
 
 * **High Performance**: Built using Go and efficient network programming techniques, delivering excellent performance and low latency.

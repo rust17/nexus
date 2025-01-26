@@ -3,7 +3,7 @@ package test
 import (
 	"testing"
 
-	"nexus/internal"
+	"nexus/internal/balancer"
 )
 
 func TestRoundRobinBalancer(t *testing.T) {
@@ -46,7 +46,7 @@ func TestRoundRobinBalancer(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) { // Using t.Run to distinguish each sub-test case
-			balancer := internal.NewRoundRobinBalancer()
+			balancer := balancer.NewRoundRobinBalancer()
 			for _, server := range tc.servers {
 				balancer.Add(server)
 			}
@@ -81,7 +81,7 @@ func TestRoundRobinBalancer(t *testing.T) {
 }
 
 func TestEmptyBalancer(t *testing.T) {
-	balancer := internal.NewRoundRobinBalancer()
+	balancer := balancer.NewRoundRobinBalancer()
 	_, err := balancer.Next()
 	if err == nil {
 		t.Error("Expected error when no servers are available")
@@ -128,7 +128,7 @@ func TestLeastConnectionsBalancer(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc // Prevent closure issues
 		t.Run(tc.name, func(t *testing.T) {
-			balancer := internal.NewLeastConnectionsBalancer()
+			balancer := balancer.NewLeastConnectionsBalancer()
 			for _, server := range tc.servers {
 				for serverAddr, connCount := range server {
 					balancer.AddWithConnCount(serverAddr, connCount)
@@ -156,12 +156,12 @@ func TestLeastConnectionsBalancer(t *testing.T) {
 func TestWeightedRoundRobinBalancer(t *testing.T) {
 	testCases := []struct {
 		name          string
-		servers       []internal.WeightedServer
+		servers       []balancer.WeightedServer
 		expectedOrder []string
 	}{
 		{
 			name: "Basic Weighted Round Robin",
-			servers: []internal.WeightedServer{
+			servers: []balancer.WeightedServer{
 				{Server: "http://server1:8080", Weight: 3},
 				{Server: "http://server2:8080", Weight: 2},
 			},
@@ -178,7 +178,7 @@ func TestWeightedRoundRobinBalancer(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc // Prevent closure issues
 		t.Run(tc.name, func(t *testing.T) {
-			balancer := internal.NewWeightedRoundRobinBalancer()
+			balancer := balancer.NewWeightedRoundRobinBalancer()
 			for _, server := range tc.servers {
 				balancer.AddWithWeight(server.Server, server.Weight)
 			}

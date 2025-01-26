@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"nexus/internal"
+	lb "nexus/internal/balancer"
 )
 
 func TestIntegration(t *testing.T) {
@@ -87,10 +88,10 @@ func TestIntegration(t *testing.T) {
 			cfg.HealthCheck.Timeout = 1 * time.Second
 
 			// Initialize load balancer
-			balancer := internal.NewBalancer(tc.balancerType)
+			balancer := lb.NewBalancer(tc.balancerType)
 			for _, server := range cfg.GetServers() {
 				if cfg.GetBalancerType() == "weighted_round_robin" {
-					if wrr, ok := balancer.(*internal.WeightedRoundRobinBalancer); ok {
+					if wrr, ok := balancer.(*lb.WeightedRoundRobinBalancer); ok {
 						wrr.AddWithWeight(server.Address, server.Weight)
 					}
 				} else {

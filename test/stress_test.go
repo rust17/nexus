@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"nexus/internal"
+	lb "nexus/internal/balancer"
 )
 
 func TestStress(t *testing.T) {
@@ -47,10 +48,10 @@ func TestStress(t *testing.T) {
 			t.Parallel()
 
 			// Initialize load balancer
-			balancer := internal.NewBalancer(tc.balancerType)
+			balancer := lb.NewBalancer(tc.balancerType)
 			for _, backend := range backends {
 				if tc.balancerType == "weighted_round_robin" {
-					if wrr, ok := balancer.(*internal.WeightedRoundRobinBalancer); ok {
+					if wrr, ok := balancer.(*lb.WeightedRoundRobinBalancer); ok {
 						wrr.AddWithWeight(backend.URL, 1)
 					}
 				} else {

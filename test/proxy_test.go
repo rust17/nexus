@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"nexus/internal"
+	lb "nexus/internal/balancer"
 )
 
 const (
@@ -50,7 +51,7 @@ func TestProxy_ServeHTTP(t *testing.T) {
 				defer backend.Close()
 			}
 
-			balancer := internal.NewBalancer("round_robin")
+			balancer := lb.NewBalancer("round_robin")
 			if backend != nil {
 				balancer.Add(backend.URL)
 			}
@@ -77,7 +78,7 @@ func TestProxy_ServeHTTP(t *testing.T) {
 func TestProxy_ErrorHandler(t *testing.T) {
 	t.Parallel()
 
-	balancer := internal.NewBalancer("round_robin")
+	balancer := lb.NewBalancer("round_robin")
 	proxy := internal.NewProxy(balancer)
 
 	customError := false

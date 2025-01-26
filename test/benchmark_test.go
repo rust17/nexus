@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"nexus/internal"
+	lb "nexus/internal/balancer"
 )
 
 func BenchmarkProxy(b *testing.B) {
@@ -29,9 +30,9 @@ func BenchmarkProxy(b *testing.B) {
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			// Initialize load balancer
-			balancer := internal.NewBalancer(bm.balancerType)
+			balancer := lb.NewBalancer(bm.balancerType)
 			if bm.balancerType == "weighted_round_robin" {
-				if wrr, ok := balancer.(*internal.WeightedRoundRobinBalancer); ok {
+				if wrr, ok := balancer.(*lb.WeightedRoundRobinBalancer); ok {
 					wrr.AddWithWeight(backend.URL, 1)
 				}
 			} else {
@@ -89,10 +90,10 @@ func BenchmarkProxyWithMultipleBackends(b *testing.B) {
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			// Initialize load balancer
-			balancer := internal.NewBalancer(bm.balancerType)
+			balancer := lb.NewBalancer(bm.balancerType)
 			for _, backend := range backends {
 				if bm.balancerType == "weighted_round_robin" {
-					if wrr, ok := balancer.(*internal.WeightedRoundRobinBalancer); ok {
+					if wrr, ok := balancer.(*lb.WeightedRoundRobinBalancer); ok {
 						wrr.AddWithWeight(backend.URL, 1)
 					}
 				} else {
@@ -148,9 +149,9 @@ func BenchmarkProxyWithHealthCheck(b *testing.B) {
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			// Initialize load balancer
-			balancer := internal.NewBalancer(bm.balancerType)
+			balancer := lb.NewBalancer(bm.balancerType)
 			if bm.balancerType == "weighted_round_robin" {
-				if wrr, ok := balancer.(*internal.WeightedRoundRobinBalancer); ok {
+				if wrr, ok := balancer.(*lb.WeightedRoundRobinBalancer); ok {
 					wrr.AddWithWeight(backend.URL, 1)
 				}
 			} else {

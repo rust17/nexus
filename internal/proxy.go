@@ -5,18 +5,19 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"sync"
+	"nexus/internal/balancer"
 )
 
 // Proxy struct represents a reverse proxy
 type Proxy struct {
 	mu           sync.RWMutex
-	balancer     Balancer
+	balancer     balancer.Balancer
 	transport    http.RoundTripper
 	errorHandler func(http.ResponseWriter, *http.Request, error)
 }
 
 // NewProxy creates a new reverse proxy instance
-func NewProxy(balancer Balancer) *Proxy {
+func NewProxy(balancer balancer.Balancer) *Proxy {
 	return &Proxy{
 		balancer:  balancer,
 		transport: http.DefaultTransport,

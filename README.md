@@ -159,7 +159,11 @@ nexus/
 ├── configs/
 │   └── config.yaml         # configuration file for configuring the proxy server
 ├── internal/
-│   ├── balancer.go         # load balancer implementation
+│   ├── balancer/
+│   │   ├── balancer.go     # load balancer implementation
+│   │   └── weighted_round_robin.go # weighted round-robin load balancer implementation
+│   │   └── round_robin.go # round-robin load balancer implementation
+│   │   └── least_connections.go # least connections load balancer implementation
 │   ├── config.go           # configuration management
 │   ├── healthcheck.go      # health check implementation
 │   ├── logger.go           # logger implementation

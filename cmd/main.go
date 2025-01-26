@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"nexus/internal"
-	"nexus/internal/balancer"
+	lb "nexus/internal/balancer"
 )
 
 func main() {
@@ -27,10 +27,10 @@ func main() {
 	}
 
 	// Initialize load balancer
-	balancer := balancer.NewBalancer(cfg.GetBalancerType())
+	balancer := lb.NewBalancer(cfg.GetBalancerType())
 	for _, server := range cfg.GetServers() {
 		if cfg.GetBalancerType() == "weighted_round_robin" {
-			if wrr, ok := balancer.(*balancer.WeightedRoundRobinBalancer); ok {
+			if wrr, ok := balancer.(*lb.WeightedRoundRobinBalancer); ok {
 				wrr.AddWithWeight(server.Address, server.Weight)
 			}
 		} else {

@@ -16,7 +16,7 @@ type WeightedRoundRobinBalancer struct {
 	mu            sync.RWMutex
 	servers       []WeightedServer
 	index         int
-	current       int
+	current       int // current weight
 	defaultWeight int // Default weight
 }
 

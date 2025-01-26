@@ -171,6 +171,7 @@ func TestWeightedRoundRobinBalancer(t *testing.T) {
 				"http://server1:8080",
 				"http://server2:8080",
 				"http://server2:8080",
+				"http://server1:8080",
 			},
 		},
 	}

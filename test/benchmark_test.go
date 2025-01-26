@@ -16,34 +16,54 @@ func BenchmarkProxy(b *testing.B) {
 	}))
 	defer backend.Close()
 
-	// Initialize load balancer
-	balancer := internal.NewBalancer("round_robin")
-	balancer.Add(backend.URL)
+	// Define benchmark scenarios
+	benchmarks := []struct {
+		name         string
+		balancerType string
+	}{
+		{"RoundRobin", "round_robin"},
+		{"WeightedRoundRobin", "weighted_round_robin"},
+		{"LeastConnections", "least_connections"},
+	}
 
-	// Initialize reverse proxy
-	proxy := internal.NewProxy(balancer)
-
-	// Create test request
-	req := httptest.NewRequest("GET", "/", nil)
-
-	b.ReportAllocs() // Report memory allocations
-	b.ResetTimer()
-
-	b.Run("Sequential", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			w := httptest.NewRecorder()
-			proxy.ServeHTTP(w, req)
-		}
-	})
-
-	b.Run("Parallel", func(b *testing.B) {
-		b.RunParallel(func(pb *testing.PB) {
-			for pb.Next() {
-				w := httptest.NewRecorder()
-				proxy.ServeHTTP(w, req)
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			// Initialize load balancer
+			balancer := internal.NewBalancer(bm.balancerType)
+			if bm.balancerType == "weighted_round_robin" {
+				if wrr, ok := balancer.(*internal.WeightedRoundRobinBalancer); ok {
+					wrr.AddWithWeight(backend.URL, 1)
+				}
+			} else {
+				balancer.Add(backend.URL)
 			}
+
+			// Initialize reverse proxy
+			proxy := internal.NewProxy(balancer)
+
+			// Create test request
+			req := httptest.NewRequest("GET", "/", nil)
+
+			b.ReportAllocs() // Report memory allocations
+			b.ResetTimer()
+
+			b.Run("Sequential", func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					w := httptest.NewRecorder()
+					proxy.ServeHTTP(w, req)
+				}
+			})
+
+			b.Run("Parallel", func(b *testing.B) {
+				b.RunParallel(func(pb *testing.PB) {
+					for pb.Next() {
+						w := httptest.NewRecorder()
+						proxy.ServeHTTP(w, req)
+					}
+				})
+			})
 		})
-	})
+	}
 }
 
 func BenchmarkProxyWithMultipleBackends(b *testing.B) {
@@ -56,36 +76,56 @@ func BenchmarkProxyWithMultipleBackends(b *testing.B) {
 		defer backends[i].Close()
 	}
 
-	// Initialize load balancer
-	balancer := internal.NewBalancer("round_robin")
-	for _, backend := range backends {
-		balancer.Add(backend.URL)
+	// Define benchmark scenarios
+	benchmarks := []struct {
+		name         string
+		balancerType string
+	}{
+		{"RoundRobin", "round_robin"},
+		{"WeightedRoundRobin", "weighted_round_robin"},
+		{"LeastConnections", "least_connections"},
 	}
 
-	// Initialize reverse proxy
-	proxy := internal.NewProxy(balancer)
-
-	// Create test request
-	req := httptest.NewRequest("GET", "/", nil)
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	b.Run("Sequential", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			w := httptest.NewRecorder()
-			proxy.ServeHTTP(w, req)
-		}
-	})
-
-	b.Run("Parallel", func(b *testing.B) {
-		b.RunParallel(func(pb *testing.PB) {
-			for pb.Next() {
-				w := httptest.NewRecorder()
-				proxy.ServeHTTP(w, req)
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			// Initialize load balancer
+			balancer := internal.NewBalancer(bm.balancerType)
+			for _, backend := range backends {
+				if bm.balancerType == "weighted_round_robin" {
+					if wrr, ok := balancer.(*internal.WeightedRoundRobinBalancer); ok {
+						wrr.AddWithWeight(backend.URL, 1)
+					}
+				} else {
+					balancer.Add(backend.URL)
+				}
 			}
+
+			// Initialize reverse proxy
+			proxy := internal.NewProxy(balancer)
+
+			// Create test request
+			req := httptest.NewRequest("GET", "/", nil)
+
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			b.Run("Sequential", func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					w := httptest.NewRecorder()
+					proxy.ServeHTTP(w, req)
+				}
+			})
+
+			b.Run("Parallel", func(b *testing.B) {
+				b.RunParallel(func(pb *testing.PB) {
+					for pb.Next() {
+						w := httptest.NewRecorder()
+						proxy.ServeHTTP(w, req)
+					}
+				})
+			})
 		})
-	})
+	}
 }
 
 func BenchmarkProxyWithHealthCheck(b *testing.B) {
@@ -95,38 +135,58 @@ func BenchmarkProxyWithHealthCheck(b *testing.B) {
 	}))
 	defer backend.Close()
 
-	// Initialize load balancer
-	balancer := internal.NewBalancer("round_robin")
-	balancer.Add(backend.URL)
+	// Define benchmark scenarios
+	benchmarks := []struct {
+		name         string
+		balancerType string
+	}{
+		{"RoundRobin", "round_robin"},
+		{"WeightedRoundRobin", "weighted_round_robin"},
+		{"LeastConnections", "least_connections"},
+	}
 
-	// Initialize health checker
-	healthChecker := internal.NewHealthChecker(10*time.Second, 1*time.Second)
-	healthChecker.AddServer(backend.URL)
-	go healthChecker.Start()
-	defer healthChecker.Stop()
-
-	// Initialize reverse proxy
-	proxy := internal.NewProxy(balancer)
-
-	// Create test request
-	req := httptest.NewRequest("GET", "/", nil)
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	b.Run("Sequential", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			w := httptest.NewRecorder()
-			proxy.ServeHTTP(w, req)
-		}
-	})
-
-	b.Run("Parallel", func(b *testing.B) {
-		b.RunParallel(func(pb *testing.PB) {
-			for pb.Next() {
-				w := httptest.NewRecorder()
-				proxy.ServeHTTP(w, req)
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			// Initialize load balancer
+			balancer := internal.NewBalancer(bm.balancerType)
+			if bm.balancerType == "weighted_round_robin" {
+				if wrr, ok := balancer.(*internal.WeightedRoundRobinBalancer); ok {
+					wrr.AddWithWeight(backend.URL, 1)
+				}
+			} else {
+				balancer.Add(backend.URL)
 			}
+
+			// Initialize health checker
+			healthChecker := internal.NewHealthChecker(10*time.Second, 1*time.Second)
+			healthChecker.AddServer(backend.URL)
+			go healthChecker.Start()
+			defer healthChecker.Stop()
+
+			// Initialize reverse proxy
+			proxy := internal.NewProxy(balancer)
+
+			// Create test request
+			req := httptest.NewRequest("GET", "/", nil)
+
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			b.Run("Sequential", func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					w := httptest.NewRecorder()
+					proxy.ServeHTTP(w, req)
+				}
+			})
+
+			b.Run("Parallel", func(b *testing.B) {
+				b.RunParallel(func(pb *testing.PB) {
+					for pb.Next() {
+						w := httptest.NewRecorder()
+						proxy.ServeHTTP(w, req)
+					}
+				})
+			})
 		})
-	})
+	}
 }

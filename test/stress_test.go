@@ -23,42 +23,55 @@ func TestStress(t *testing.T) {
 		t.Cleanup(func() { backends[i].Close() }) // Use t.Cleanup instead of defer
 	}
 
-	// Initialize load balancer
-	balancer := internal.NewBalancer("round_robin")
-	for _, backend := range backends {
-		balancer.Add(backend.URL)
-	}
-
-	// Initialize health checker
-	healthChecker := internal.NewHealthChecker(1*time.Second, 500*time.Millisecond)
-	for _, backend := range backends {
-		healthChecker.AddServer(backend.URL)
-	}
-	go healthChecker.Start()
-	t.Cleanup(func() { healthChecker.Stop() })
-
-	// Initialize reverse proxy
-	proxy := internal.NewProxy(balancer)
-
-	// Start proxy server
-	proxyServer := httptest.NewServer(proxy)
-	t.Cleanup(func() { proxyServer.Close() })
-
 	// Define test scenarios
 	testCases := []struct {
 		name              string
+		balancerType      string
 		concurrency       int
 		requestsPerClient int
 	}{
-		{"LowLoad", 10, 10},
-		{"MediumLoad", 50, 20},
-		{"HighLoad", 100, 100},
+		{"RoundRobin_LowLoad", "round_robin", 10, 10},
+		{"RoundRobin_MediumLoad", "round_robin", 50, 20},
+		{"RoundRobin_HighLoad", "round_robin", 100, 100},
+		{"WeightedRoundRobin_LowLoad", "weighted_round_robin", 10, 10},
+		{"WeightedRoundRobin_MediumLoad", "weighted_round_robin", 50, 20},
+		{"WeightedRoundRobin_HighLoad", "weighted_round_robin", 100, 100},
+		{"LeastConnections_LowLoad", "least_connections", 10, 10},
+		{"LeastConnections_MediumLoad", "least_connections", 50, 20},
+		{"LeastConnections_HighLoad", "least_connections", 100, 100},
 	}
 
 	for _, tc := range testCases {
 		tc := tc // Capture loop variable
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
+			// Initialize load balancer
+			balancer := internal.NewBalancer(tc.balancerType)
+			for _, backend := range backends {
+				if tc.balancerType == "weighted_round_robin" {
+					if wrr, ok := balancer.(*internal.WeightedRoundRobinBalancer); ok {
+						wrr.AddWithWeight(backend.URL, 1)
+					}
+				} else {
+					balancer.Add(backend.URL)
+				}
+			}
+
+			// Initialize health checker
+			healthChecker := internal.NewHealthChecker(1*time.Second, 500*time.Millisecond)
+			for _, backend := range backends {
+				healthChecker.AddServer(backend.URL)
+			}
+			go healthChecker.Start()
+			t.Cleanup(func() { healthChecker.Stop() })
+
+			// Initialize reverse proxy
+			proxy := internal.NewProxy(balancer)
+
+			// Start proxy server
+			proxyServer := httptest.NewServer(proxy)
+			t.Cleanup(func() { proxyServer.Close() })
 
 			// Wait group
 			var wg sync.WaitGroup

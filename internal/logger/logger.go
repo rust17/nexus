@@ -1,9 +1,10 @@
-package internal
+package logger
 
 import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -25,6 +26,27 @@ const (
 	LevelError
 	LevelFatal
 )
+
+func (l *Logger) Level() LogLevel {
+	return l.level
+}
+
+func (l *Logger) ToLogLevel(level string) LogLevel {
+	switch strings.ToLower(level) {
+	case "debug":
+		return LevelDebug
+	case "info":
+		return LevelInfo
+	case "warn":
+		return LevelWarn
+	case "error":
+		return LevelError
+	case "fatal":
+		return LevelFatal
+	default:
+		return LevelInfo
+	}
+}
 
 // NewLogger creates a new logger instance
 func NewLogger(level LogLevel) *Logger {

@@ -2,6 +2,7 @@ package balancer
 
 import (
 	"errors"
+	"nexus/internal/config"
 	"sync"
 )
 
@@ -56,4 +57,22 @@ func (b *RoundRobinBalancer) Remove(server string) {
 			break
 		}
 	}
+}
+
+// UpdateServers updates the list of servers
+func (b *RoundRobinBalancer) UpdateServers(servers []config.ServerConfig) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	newServers := make([]string, 0, len(servers))
+	for _, server := range servers {
+		newServers = append(newServers, server.Address)
+	}
+
+	b.servers = newServers
+	b.index = 0
+}
+
+func (b *RoundRobinBalancer) GetServers() []string {
+	return b.servers
 }

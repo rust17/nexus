@@ -1,11 +1,11 @@
-package internal
+package proxy
 
 import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"sync"
 	"nexus/internal/balancer"
+	"sync"
 )
 
 // Proxy struct represents a reverse proxy

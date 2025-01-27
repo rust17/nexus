@@ -1,4 +1,4 @@
-package internal
+package config
 
 import (
 	"encoding/json"
@@ -37,6 +37,14 @@ type ServerConfig struct {
 type HealthCheckConfig struct {
 	Interval time.Duration `yaml:"interval" json:"interval"`
 	Timeout  time.Duration `yaml:"timeout" json:"timeout"`
+}
+
+// ConfigWatcher struct for file monitoring
+type ConfigWatcher struct {
+	mu       sync.RWMutex
+	filePath string
+	lastMod  time.Time
+	watchers []func(*Config)
 }
 
 // NewConfig creates a new configuration instance
@@ -136,4 +144,51 @@ func (c *Config) GetLogLevel() string {
 	defer c.mu.RUnlock()
 
 	return c.LogLevel
+}
+
+// NewConfigWatcher creates a new ConfigWatcher
+func NewConfigWatcher(filePath string) *ConfigWatcher {
+	return &ConfigWatcher{
+		filePath: filePath,
+		watchers: make([]func(*Config), 0),
+	}
+}
+
+// Watch adds a callback function to be called when the config changes
+func (cw *ConfigWatcher) Watch(callback func(*Config)) {
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+
+	cw.watchers = append(cw.watchers, callback)
+}
+
+// Start starts the config watcher
+func (cw *ConfigWatcher) Start() {
+	go func() {
+		for {
+			cw.checkForUpdate()
+			time.Sleep(1 * time.Second)
+		}
+	}()
+}
+
+// checkForUpdate checks if the config file has been updated
+func (cw *ConfigWatcher) checkForUpdate() {
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+
+	fileInfo, err := os.Stat(cw.filePath)
+	if err != nil {
+		return
+	}
+
+	if fileInfo.ModTime().After(cw.lastMod) {
+		cw.lastMod = fileInfo.ModTime()
+		cfg := NewConfig()
+		if err := cfg.LoadFromFile(cw.filePath); err == nil {
+			for _, watcher := range cw.watchers {
+				watcher(cfg)
+			}
+		}
+	}
 }

@@ -3,6 +3,7 @@ package balancer
 import (
 	"errors"
 	"math"
+	"nexus/internal/config"
 	"sync"
 )
 
@@ -110,4 +111,22 @@ func (b *LeastConnectionsBalancer) Done(server string) {
 			break
 		}
 	}
+}
+
+// UpdateServers updates the servers in the balancer
+func (b *LeastConnectionsBalancer) UpdateServers(servers []config.ServerConfig) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.servers = make([]LeastConnectionsServer, 0, len(servers))
+	for _, server := range servers {
+		b.servers = append(b.servers, LeastConnectionsServer{
+			Server:    server.Address,
+			ConnCount: 0,
+		})
+	}
+}
+
+func (b *LeastConnectionsBalancer) GetServers() []LeastConnectionsServer {
+	return b.servers
 }

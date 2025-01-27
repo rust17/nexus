@@ -1,4 +1,4 @@
-package internal
+package healthcheck
 
 import (
 	"context"
@@ -116,4 +116,28 @@ func (h *HealthChecker) UpdateServerStatus(server string, healthy bool) {
 	defer h.mu.Unlock()
 
 	h.servers[server] = healthy
+}
+
+// UpdateInterval updates the health checking interval
+func (h *HealthChecker) UpdateInterval(newInterval time.Duration) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	h.interval = newInterval
+}
+
+// UpdateTimeout updates the health checking timeout
+func (h *HealthChecker) UpdateTimeout(newTimeout time.Duration) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	h.timeout = newTimeout
+}
+
+func (h *HealthChecker) GetInterval() time.Duration {
+	return h.interval
+}
+
+func (h *HealthChecker) GetTimeout() time.Duration {
+	return h.timeout
 }

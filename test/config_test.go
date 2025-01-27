@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"nexus/internal"
+	"nexus/internal/config"
 )
 
 func TestConfigLoad_ValidConfig(t *testing.T) {
@@ -28,7 +28,7 @@ log_level: "debug"
 
 	configFile := createTempConfigFile(t, configContent)
 
-	cfg := internal.NewConfig()
+	cfg := config.NewConfig()
 	if err := cfg.LoadFromFile(configFile); err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
@@ -63,7 +63,7 @@ log_level: "debug"
 func TestConfigLoad_InvalidFile(t *testing.T) {
 	t.Parallel()
 
-	cfg := internal.NewConfig()
+	cfg := config.NewConfig()
 	err := cfg.LoadFromFile("nonexistent.yaml")
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("Expected os.ErrNotExist, got %v", err)
@@ -78,7 +78,7 @@ func TestInvalidConfigFormat(t *testing.T) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	cfg := internal.NewConfig()
+	cfg := config.NewConfig()
 	err = cfg.LoadFromFile(tmpFile.Name())
 	if err == nil {
 		t.Error("Expected error for invalid config format")
@@ -96,4 +96,53 @@ func createTempConfigFile(t *testing.T, content string) string {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 	return tmpFile.Name()
+}
+
+func TestConfigHotReload(t *testing.T) {
+	// 创建临时配置文件
+	configContent := `
+listen_addr: ":8080"
+balancer_type: "round_robin"
+servers:
+  - address: "http://localhost:8081"
+    weight: 1
+health_check:
+  interval: 10s
+  timeout: 2s
+log_level: "info"
+`
+	configFile := createTempConfigFile(t, configContent)
+	defer os.Remove(configFile)
+
+	// 初始化配置监控器
+	watcher := config.NewConfigWatcher(configFile)
+
+	var updated bool
+	watcher.Watch(func(cfg *config.Config) {
+		updated = true
+	})
+
+	go watcher.Start()
+
+	// 修改配置文件
+	newConfigContent := `
+listen_addr: ":8081"
+balancer_type: "weighted_round_robin"
+servers:
+  - address: "http://localhost:8082"
+    weight: 2
+health_check:
+  interval: 5s
+  timeout: 1s
+log_level: "debug"
+`
+	if err := os.WriteFile(configFile, []byte(newConfigContent), 0644); err != nil {
+		t.Fatalf("Failed to update config file: %v", err)
+	}
+
+	// 等待更新
+	time.Sleep(1 * time.Second)
+	if !updated {
+		t.Error("Config update not detected")
+	}
 }

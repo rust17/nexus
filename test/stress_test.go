@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"nexus/internal"
 	lb "nexus/internal/balancer"
+	"nexus/internal/healthcheck"
+	px "nexus/internal/proxy"
 )
 
 func TestStress(t *testing.T) {
@@ -60,7 +61,7 @@ func TestStress(t *testing.T) {
 			}
 
 			// Initialize health checker
-			healthChecker := internal.NewHealthChecker(1*time.Second, 500*time.Millisecond)
+			healthChecker := healthcheck.NewHealthChecker(1*time.Second, 500*time.Millisecond)
 			for _, backend := range backends {
 				healthChecker.AddServer(backend.URL)
 			}
@@ -68,7 +69,7 @@ func TestStress(t *testing.T) {
 			t.Cleanup(func() { healthChecker.Stop() })
 
 			// Initialize reverse proxy
-			proxy := internal.NewProxy(balancer)
+			proxy := px.NewProxy(balancer)
 
 			// Start proxy server
 			proxyServer := httptest.NewServer(proxy)

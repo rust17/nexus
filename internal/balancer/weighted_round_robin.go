@@ -2,6 +2,7 @@ package balancer
 
 import (
 	"errors"
+	"nexus/internal/config"
 	"sync"
 )
 
@@ -69,7 +70,7 @@ func (b *WeightedRoundRobinBalancer) AddWithWeight(server string, weight int) {
 
 	b.servers = append(b.servers, WeightedServer{
 		Server: server,
-		Weight: weight,
+		Weight: b.GetDefaultWeight(weight),
 	})
 }
 
@@ -87,4 +88,32 @@ func (b *WeightedRoundRobinBalancer) Remove(server string) {
 			break
 		}
 	}
+}
+
+// UpdateServers updates the list of servers
+func (b *WeightedRoundRobinBalancer) UpdateServers(servers []config.ServerConfig) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.servers = make([]WeightedServer, 0, len(servers))
+	for _, server := range servers {
+		b.servers = append(b.servers, WeightedServer{
+			Server: server.Address,
+			Weight: b.GetDefaultWeight(server.Weight),
+		})
+	}
+	b.current = 0
+	b.index = 0
+}
+
+func (b *WeightedRoundRobinBalancer) GetServers() []WeightedServer {
+	return b.servers
+}
+
+func (b *WeightedRoundRobinBalancer) GetDefaultWeight(weight int) int {
+	if weight <= 0 {
+		return b.defaultWeight
+	}
+
+	return weight
 }

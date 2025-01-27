@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"nexus/internal"
 	lb "nexus/internal/balancer"
+	"nexus/internal/healthcheck"
+	px "nexus/internal/proxy"
 )
 
 func BenchmarkProxy(b *testing.B) {
@@ -40,7 +41,7 @@ func BenchmarkProxy(b *testing.B) {
 			}
 
 			// Initialize reverse proxy
-			proxy := internal.NewProxy(balancer)
+			proxy := px.NewProxy(balancer)
 
 			// Create test request
 			req := httptest.NewRequest("GET", "/", nil)
@@ -102,7 +103,7 @@ func BenchmarkProxyWithMultipleBackends(b *testing.B) {
 			}
 
 			// Initialize reverse proxy
-			proxy := internal.NewProxy(balancer)
+			proxy := px.NewProxy(balancer)
 
 			// Create test request
 			req := httptest.NewRequest("GET", "/", nil)
@@ -159,13 +160,13 @@ func BenchmarkProxyWithHealthCheck(b *testing.B) {
 			}
 
 			// Initialize health checker
-			healthChecker := internal.NewHealthChecker(10*time.Second, 1*time.Second)
+			healthChecker := healthcheck.NewHealthChecker(10*time.Second, 1*time.Second)
 			healthChecker.AddServer(backend.URL)
 			go healthChecker.Start()
 			defer healthChecker.Stop()
 
 			// Initialize reverse proxy
-			proxy := internal.NewProxy(balancer)
+			proxy := px.NewProxy(balancer)
 
 			// Create test request
 			req := httptest.NewRequest("GET", "/", nil)

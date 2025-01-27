@@ -9,21 +9,27 @@ import (
 	"syscall"
 	"time"
 
-	"nexus/internal"
 	lb "nexus/internal/balancer"
+	"nexus/internal/config"
+	"nexus/internal/healthcheck"
+	lg "nexus/internal/logger"
+	px "nexus/internal/proxy"
 )
 
 func main() {
 	// Load configuration
-	cfg := internal.NewConfig()
+	cfg := config.NewConfig()
 	if err := cfg.LoadFromFile("configs/config.yaml"); err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
+	// Initialize configuration watcher
+	configWatcher := config.NewConfigWatcher("configs/config.yaml")
+
 	// Initialize logger
-	logger := internal.NewLogger(internal.LevelInfo)
+	logger := lg.NewLogger(lg.LevelInfo)
 	if cfg.GetLogLevel() == "debug" {
-		logger.SetLevel(internal.LevelDebug)
+		logger.SetLevel(lg.LevelDebug)
 	}
 
 	// Initialize load balancer
@@ -40,7 +46,7 @@ func main() {
 
 	// Initialize health checker
 	healthCheckCfg := cfg.GetHealthCheckConfig()
-	healthChecker := internal.NewHealthChecker(healthCheckCfg.Interval, healthCheckCfg.Timeout)
+	healthChecker := healthcheck.NewHealthChecker(healthCheckCfg.Interval, healthCheckCfg.Timeout)
 	for _, server := range cfg.GetServers() {
 		healthChecker.AddServer(server.Address)
 	}
@@ -48,11 +54,29 @@ func main() {
 	defer healthChecker.Stop()
 
 	// Initialize reverse proxy
-	proxy := internal.NewProxy(balancer)
+	proxy := px.NewProxy(balancer)
 	proxy.SetErrorHandler(func(w http.ResponseWriter, r *http.Request, err error) {
 		logger.Error("Proxy error: %v", err)
 		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
 	})
+
+	// Register configuration update callback
+	configWatcher.Watch(func(newCfg *config.Config) {
+		logger.Info("Configuration changed, applying updates...")
+
+		// Update load balancer
+		balancer.UpdateServers(newCfg.GetServers())
+
+		// Update health check
+		healthChecker.UpdateInterval(newCfg.GetHealthCheckConfig().Interval)
+		healthChecker.UpdateTimeout(newCfg.GetHealthCheckConfig().Timeout)
+
+		// Update log level
+		logger.SetLevel(logger.ToLogLevel(newCfg.GetLogLevel()))
+	})
+
+	// Start configuration watcher
+	configWatcher.Start()
 
 	// Start HTTP server
 	server := &http.Server{

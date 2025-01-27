@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"nexus/internal"
+	"nexus/internal/healthcheck"
 )
 
 const (
@@ -58,7 +58,7 @@ func TestHealthChecker(t *testing.T) {
 			defer ts.Close()
 
 			// Create health checker
-			checker := internal.NewHealthChecker(healthCheckInterval, healthCheckTimeout)
+			checker := healthcheck.NewHealthChecker(healthCheckInterval, healthCheckTimeout)
 			checker.AddServer(ts.URL)
 			go checker.Start()
 			defer checker.Stop()
@@ -90,7 +90,7 @@ func TestHealthChecker_RemoveServer(t *testing.T) {
 	defer ts.Close()
 
 	// Create health checker
-	checker := internal.NewHealthChecker(healthCheckInterval, healthCheckTimeout)
+	checker := healthcheck.NewHealthChecker(healthCheckInterval, healthCheckTimeout)
 	checker.AddServer(ts.URL)
 	go checker.Start()
 	defer checker.Stop()
@@ -102,5 +102,22 @@ func TestHealthChecker_RemoveServer(t *testing.T) {
 	checker.RemoveServer(ts.URL)
 	if checker.IsHealthy(ts.URL) {
 		t.Error("Removed server should not be considered healthy")
+	}
+}
+
+func TestHealthChecker_UpdateConfig(t *testing.T) {
+	healthChecker := healthcheck.NewHealthChecker(10*time.Second, 1*time.Second)
+	healthChecker.AddServer("http://server1:8080")
+
+	// Update interval and timeout
+	healthChecker.UpdateInterval(5 * time.Second)
+	healthChecker.UpdateTimeout(500 * time.Millisecond)
+
+	if healthChecker.GetInterval() != 5*time.Second {
+		t.Errorf("Expected interval 5s, got %v", healthChecker.GetInterval())
+	}
+
+	if healthChecker.GetTimeout() != 500*time.Millisecond {
+		t.Errorf("Expected timeout 500ms, got %v", healthChecker.GetTimeout())
 	}
 }

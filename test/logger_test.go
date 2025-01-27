@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"nexus/internal"
+	internal "nexus/internal/logger"
 )
 
 const (
@@ -146,5 +146,14 @@ func TestLogger_Fatal(t *testing.T) {
 
 	if !bytes.Contains(buf.Bytes(), []byte("[FATAL] "+testLogMessage)) {
 		t.Errorf("Expected fatal log message, got %q", buf.String())
+	}
+}
+
+func TestLogger_UpdateLevel(t *testing.T) {
+	logger := internal.NewLogger(internal.LevelInfo)
+	logger.SetLevel(internal.LevelDebug)
+
+	if logger.Level() != internal.LevelDebug {
+		t.Errorf("Expected log level Debug, got %v", logger.Level())
 	}
 }

@@ -3,11 +3,14 @@ package test
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
-	"nexus/internal"
 	lb "nexus/internal/balancer"
+	"nexus/internal/config"
+	"nexus/internal/healthcheck"
+	px "nexus/internal/proxy"
 )
 
 func TestIntegration(t *testing.T) {
@@ -28,13 +31,13 @@ func TestIntegration(t *testing.T) {
 	testCases := []struct {
 		name          string
 		balancerType  string
-		servers       []internal.ServerConfig
+		servers       []config.ServerConfig
 		expectedOrder []string
 	}{
 		{
 			name:         "Round Robin",
 			balancerType: "round_robin",
-			servers: []internal.ServerConfig{
+			servers: []config.ServerConfig{
 				{Address: backend1.URL, Weight: 1},
 				{Address: backend2.URL, Weight: 1},
 			},
@@ -48,7 +51,7 @@ func TestIntegration(t *testing.T) {
 		{
 			name:         "Weighted Round Robin",
 			balancerType: "weighted_round_robin",
-			servers: []internal.ServerConfig{
+			servers: []config.ServerConfig{
 				{Address: backend1.URL, Weight: 2},
 				{Address: backend2.URL, Weight: 1},
 			},
@@ -64,7 +67,7 @@ func TestIntegration(t *testing.T) {
 		{
 			name:         "Least Connections",
 			balancerType: "least_connections",
-			servers: []internal.ServerConfig{
+			servers: []config.ServerConfig{
 				{Address: backend1.URL, Weight: 1},
 				{Address: backend2.URL, Weight: 1},
 			},
@@ -81,7 +84,7 @@ func TestIntegration(t *testing.T) {
 		tc := tc // Prevent closure issues
 		t.Run(tc.name, func(t *testing.T) {
 			// Create configuration
-			cfg := internal.NewConfig()
+			cfg := config.NewConfig()
 			cfg.BalancerType = tc.balancerType
 			cfg.Servers = tc.servers
 			cfg.HealthCheck.Interval = 100 * time.Millisecond
@@ -100,7 +103,7 @@ func TestIntegration(t *testing.T) {
 			}
 
 			// Initialize health checker
-			healthChecker := internal.NewHealthChecker(cfg.GetHealthCheckConfig().Interval, cfg.GetHealthCheckConfig().Timeout)
+			healthChecker := healthcheck.NewHealthChecker(cfg.GetHealthCheckConfig().Interval, cfg.GetHealthCheckConfig().Timeout)
 			for _, server := range cfg.GetServers() {
 				healthChecker.AddServer(server.Address)
 			}
@@ -108,7 +111,7 @@ func TestIntegration(t *testing.T) {
 			defer healthChecker.Stop()
 
 			// Initialize reverse proxy
-			proxy := internal.NewProxy(balancer)
+			proxy := px.NewProxy(balancer)
 
 			// Test request routing
 			req := httptest.NewRequest("GET", "/", nil)
@@ -122,5 +125,74 @@ func TestIntegration(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestConfigHotReloadIntegration(t *testing.T) {
+	// create a temp config file
+	configContent := `
+listen_addr: ":8080"
+balancer_type: "round_robin"
+servers:
+  - address: "http://localhost:8081"
+    weight: 1
+health_check:
+  interval: 10s
+  timeout: 2s
+log_level: "info"
+`
+	configFile := createTempConfigFile(t, configContent)
+	defer os.Remove(configFile)
+
+	// init config watcher
+	watcher := config.NewConfigWatcher(configFile)
+
+	go watcher.Start()
+
+	// update config file
+	newConfigContent := `
+listen_addr: ":8081"
+balancer_type: "weighted_round_robin"
+servers:
+  - address: "http://localhost:8082"
+    weight: 2
+health_check:
+  interval: 5s
+  timeout: 1s
+log_level: "debug"
+`
+	time.Sleep(2 * time.Second)
+	if err := os.WriteFile(configFile, []byte(newConfigContent), 0644); err != nil {
+		t.Fatalf("Failed to update config file: %v", err)
+	}
+
+	var updated bool
+	watcher.Watch(func(cfg *config.Config) {
+		updated = true
+		// verify updated config
+		if cfg.GetListenAddr() != ":8081" {
+			t.Errorf("Expected listen_addr :8081, got %s", cfg.GetListenAddr())
+		}
+		if cfg.GetBalancerType() != "weighted_round_robin" {
+			t.Errorf("Expected balancer_type weighted_round_robin, got %s", cfg.GetBalancerType())
+		}
+		if len(cfg.GetServers()) != 1 || cfg.GetServers()[0].Address != "http://localhost:8082" {
+			t.Errorf("Unexpected servers list: %v", cfg.GetServers())
+		}
+		if cfg.GetHealthCheckConfig().Interval != 5*time.Second {
+			t.Errorf("Expected health check interval 5s, got %v", cfg.GetHealthCheckConfig().Interval)
+		}
+		if cfg.GetHealthCheckConfig().Timeout != 1*time.Second {
+			t.Errorf("Expected health check timeout 1s, got %v", cfg.GetHealthCheckConfig().Timeout)
+		}
+		if cfg.GetLogLevel() != "debug" {
+			t.Errorf("Expected log level debug, got %s", cfg.GetLogLevel())
+		}
+	})
+
+	// wait for update
+	time.Sleep(2 * time.Second)
+	if !updated {
+		t.Error("Config update not detected")
 	}
 }

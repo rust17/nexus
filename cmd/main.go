@@ -26,10 +26,10 @@ func main() {
 	// Initialize configuration watcher
 	configWatcher := config.NewConfigWatcher("configs/config.yaml")
 
-	// Initialize logger
-	logger := lg.NewLogger(lg.LevelInfo)
-	if cfg.GetLogLevel() == "debug" {
-		logger.SetLevel(lg.LevelDebug)
+	// Initialize logger (using singleton mode)
+	logger := lg.GetInstance()
+	if cfg.GetLogLevel() != "" {
+		logger.SetLevel(logger.ToLogLevel(cfg.GetLogLevel()))
 	}
 
 	// Initialize load balancer

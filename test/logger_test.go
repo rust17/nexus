@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	internal "nexus/internal/logger"
+	lg "nexus/internal/logger"
 )
 
 const (
@@ -16,46 +16,46 @@ func TestLogger_Levels(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		level         internal.LogLevel
-		logFunc       func(*internal.Logger)
+		level         lg.LogLevel
+		logFunc       func(*lg.Logger)
 		expectMessage string
 	}{
 		{
 			name:  "DebugLevel",
-			level: internal.LevelDebug,
-			logFunc: func(l *internal.Logger) {
+			level: lg.LevelDebug,
+			logFunc: func(l *lg.Logger) {
 				l.Debug(testLogMessage)
 			},
 			expectMessage: "[DEBUG] " + testLogMessage,
 		},
 		{
 			name:  "InfoLevel",
-			level: internal.LevelInfo,
-			logFunc: func(l *internal.Logger) {
+			level: lg.LevelInfo,
+			logFunc: func(l *lg.Logger) {
 				l.Info(testLogMessage)
 			},
 			expectMessage: "[INFO] " + testLogMessage,
 		},
 		{
 			name:  "WarnLevel",
-			level: internal.LevelWarn,
-			logFunc: func(l *internal.Logger) {
+			level: lg.LevelWarn,
+			logFunc: func(l *lg.Logger) {
 				l.Warn(testLogMessage)
 			},
 			expectMessage: "[WARN] " + testLogMessage,
 		},
 		{
 			name:  "ErrorLevel",
-			level: internal.LevelError,
-			logFunc: func(l *internal.Logger) {
+			level: lg.LevelError,
+			logFunc: func(l *lg.Logger) {
 				l.Error(testLogMessage)
 			},
 			expectMessage: "[ERROR] " + testLogMessage,
 		},
 		{
 			name:  "FatalLevel",
-			level: internal.LevelFatal,
-			logFunc: func(l *internal.Logger) {
+			level: lg.LevelFatal,
+			logFunc: func(l *lg.Logger) {
 				l.SetExitFunc(func(int) {}) // Prevent exit
 				l.Fatal(testLogMessage)
 			},
@@ -69,7 +69,8 @@ func TestLogger_Levels(t *testing.T) {
 			t.Parallel()
 
 			var buf bytes.Buffer
-			logger := internal.NewLogger(tt.level)
+			logger := lg.GetInstance()
+			logger.SetLevel(tt.level)
 			logger.SetOutput(&buf)
 
 			tt.logFunc(logger)
@@ -86,22 +87,22 @@ func TestLogger_LevelFiltering(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		level         internal.LogLevel
-		logFunc       func(*internal.Logger)
+		level         lg.LogLevel
+		logFunc       func(*lg.Logger)
 		expectMessage bool
 	}{
 		{
 			name:  "DebugLevelFiltered",
-			level: internal.LevelInfo,
-			logFunc: func(l *internal.Logger) {
+			level: lg.LevelInfo,
+			logFunc: func(l *lg.Logger) {
 				l.Debug(testLogMessage)
 			},
 			expectMessage: false,
 		},
 		{
 			name:  "InfoLevelNotFiltered",
-			level: internal.LevelInfo,
-			logFunc: func(l *internal.Logger) {
+			level: lg.LevelInfo,
+			logFunc: func(l *lg.Logger) {
 				l.Info(testLogMessage)
 			},
 			expectMessage: true,
@@ -114,7 +115,8 @@ func TestLogger_LevelFiltering(t *testing.T) {
 			t.Parallel()
 
 			var buf bytes.Buffer
-			logger := internal.NewLogger(tt.level)
+			logger := lg.GetInstance()
+			logger.SetLevel(tt.level)
 			logger.SetOutput(&buf)
 
 			tt.logFunc(logger)
@@ -132,7 +134,8 @@ func TestLogger_Fatal(t *testing.T) {
 	var buf bytes.Buffer
 	exitCalled := false
 
-	logger := internal.NewLogger(internal.LevelFatal)
+	logger := lg.GetInstance()
+	logger.SetLevel(lg.LevelFatal)
 	logger.SetOutput(&buf)
 	logger.SetExitFunc(func(int) {
 		exitCalled = true
@@ -150,10 +153,10 @@ func TestLogger_Fatal(t *testing.T) {
 }
 
 func TestLogger_UpdateLevel(t *testing.T) {
-	logger := internal.NewLogger(internal.LevelInfo)
-	logger.SetLevel(internal.LevelDebug)
+	logger := lg.GetInstance()
+	logger.SetLevel(lg.LevelDebug)
 
-	if logger.Level() != internal.LevelDebug {
+	if logger.Level() != lg.LevelDebug {
 		t.Errorf("Expected log level Debug, got %v", logger.Level())
 	}
 }

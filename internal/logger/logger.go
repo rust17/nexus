@@ -27,6 +27,19 @@ const (
 	LevelFatal
 )
 
+var (
+	instance *Logger
+	once     sync.Once
+)
+
+// GetInstance returns the singleton Logger instance
+func GetInstance() *Logger {
+	once.Do(func() {
+		instance = newLogger(LevelInfo)
+	})
+	return instance
+}
+
 func (l *Logger) Level() LogLevel {
 	return l.level
 }
@@ -48,8 +61,8 @@ func (l *Logger) ToLogLevel(level string) LogLevel {
 	}
 }
 
-// NewLogger creates a new logger instance
-func NewLogger(level LogLevel) *Logger {
+// newLogger creates a new logger instance
+func newLogger(level LogLevel) *Logger {
 	return &Logger{
 		logger:   log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile),
 		level:    level,

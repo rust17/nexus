@@ -3,6 +3,7 @@ package test
 import (
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -144,5 +145,148 @@ log_level: "debug"
 	time.Sleep(1 * time.Second)
 	if !updated {
 		t.Error("Config update not detected")
+	}
+}
+
+func TestConfigLoad_InValidConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		config      string
+		expectedErr string
+	}{
+		{
+			name: "EmptyListenAddr",
+			config: `
+balancer_type: "round_robin"
+servers:
+  - address: "http://localhost:8081"
+health_check:
+  interval: 10s
+  timeout: 2s
+`,
+			expectedErr: "listen address cannot be empty",
+		},
+		{
+			name: "InvalidBalancerType",
+			config: `
+listen_addr: ":8080"
+balancer_type: "invalid_type"
+servers:
+  - address: "http://localhost:8081"
+health_check:
+  interval: 10s
+  timeout: 2s
+`,
+			expectedErr: "invalid balancer type",
+		},
+		{
+			name: "EmptyServerList",
+			config: `
+listen_addr: ":8080"
+balancer_type: "round_robin"
+health_check:
+  interval: 10s
+  timeout: 2s
+`,
+			expectedErr: "at least one server must be configured",
+		},
+		{
+			name: "EmptyServerAddress",
+			config: `
+listen_addr: ":8080"
+balancer_type: "round_robin"
+servers:
+  - address: ""
+health_check:
+  interval: 10s
+  timeout: 2s
+`,
+			expectedErr: "server address cannot be empty",
+		},
+		{
+			name: "InvalidHealthCheckInterval",
+			config: `
+listen_addr: ":8080"
+balancer_type: "round_robin"
+servers:
+  - address: "http://localhost:8081"
+health_check:
+  interval: 0s
+  timeout: 2s
+`,
+			expectedErr: "health check interval must be positive",
+		},
+		{
+			name: "InvalidHealthCheckTimeout",
+			config: `
+listen_addr: ":8080"
+balancer_type: "round_robin"
+servers:
+  - address: "http://localhost:8081"
+health_check:
+  interval: 10s
+  timeout: 0s
+`,
+			expectedErr: "health check timeout must be positive",
+		},
+		{
+			name: "TimeoutGreaterThanInterval",
+			config: `
+listen_addr: ":8080"
+balancer_type: "round_robin"
+servers:
+  - address: "http://localhost:8081"
+health_check:
+  interval: 5s
+  timeout: 10s
+`,
+			expectedErr: "health check timeout must be less than interval",
+		},
+		{
+			name: "InvalidLogLevel",
+			config: `
+listen_addr: ":8080"
+balancer_type: "round_robin"
+servers:
+  - address: "http://localhost:8081"
+health_check:
+  interval: 10s
+  timeout: 2s
+log_level: "invalid_level"
+`,
+			expectedErr: "invalid log level",
+		},
+		{
+			name: "InvalidWeightedRoundRobin",
+			config: `
+listen_addr: ":8080"
+balancer_type: "weighted_round_robin"
+servers:
+  - address: "http://localhost:8081"
+    weight: 0
+health_check:
+  interval: 10s
+  timeout: 2s
+`,
+			expectedErr: "invalid weight for server",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configFile := createTempConfigFile(t, tt.config)
+
+			cfg := config.NewConfig()
+			err := cfg.LoadFromFile(configFile)
+			if err == nil {
+				t.Fatal("Expected error but got nil")
+			}
+
+			if !strings.Contains(err.Error(), tt.expectedErr) {
+				t.Errorf("Expected error to contain %q, got %q", tt.expectedErr, err.Error())
+			}
+		})
 	}
 }

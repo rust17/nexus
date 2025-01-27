@@ -3,10 +3,13 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	lg "nexus/internal/logger"
 
 	"gopkg.in/yaml.v3"
 )
@@ -49,15 +52,7 @@ type ConfigWatcher struct {
 
 // NewConfig creates a new configuration instance
 func NewConfig() *Config {
-	return &Config{
-		ListenAddr:   ":8080",
-		BalancerType: "round_robin",
-		LogLevel:     "info",
-		HealthCheck: HealthCheckConfig{
-			Interval: 10 * time.Second,
-			Timeout:  2 * time.Second,
-		},
-	}
+	return &Config{}
 }
 
 // LoadFromFile loads configuration from a file
@@ -73,12 +68,18 @@ func (c *Config) LoadFromFile(path string) error {
 	// Decide whether to use YAML or JSON based on the file extension
 	switch filepath.Ext(path) {
 	case ".yaml", ".yml":
-		return yaml.Unmarshal(data, c)
+		if err := yaml.Unmarshal(data, c); err != nil {
+			return err
+		}
 	case ".json":
-		return json.Unmarshal(data, c)
+		if err := json.Unmarshal(data, c); err != nil {
+			return err
+		}
 	default:
 		return errors.New("unsupported config file format")
 	}
+
+	return c.validate()
 }
 
 // SaveToFile saves configuration to a file
@@ -185,10 +186,77 @@ func (cw *ConfigWatcher) checkForUpdate() {
 	if fileInfo.ModTime().After(cw.lastMod) {
 		cw.lastMod = fileInfo.ModTime()
 		cfg := NewConfig()
-		if err := cfg.LoadFromFile(cw.filePath); err == nil {
-			for _, watcher := range cw.watchers {
-				watcher(cfg)
+		if err := cfg.LoadFromFile(cw.filePath); err != nil {
+			logger := lg.GetInstance()
+			logger.Error("update config error - type: %T, detail: %v", err, err)
+
+			switch e := err.(type) {
+			case *os.PathError:
+				logger.Error("config file access error - operation[%s] path[%s]", e.Op, e.Path)
+			default:
+				logger.Error("config error - %v", err)
 			}
+			return
+		}
+
+		for _, watcher := range cw.watchers {
+			watcher(cfg)
 		}
 	}
+}
+
+// validate validate config
+func (c *Config) validate() error {
+	// validate listen address
+	if c.ListenAddr == "" {
+		return errors.New("listen address cannot be empty")
+	}
+
+	// validate balancer type
+	validBalancerTypes := map[string]bool{
+		"round_robin":          true,
+		"weighted_round_robin": true,
+		"least_connections":    true,
+	}
+	if !validBalancerTypes[c.BalancerType] {
+		return fmt.Errorf("invalid balancer type: %s", c.BalancerType)
+	}
+
+	// validate log level
+	validLogLevels := map[string]bool{
+		"debug": true,
+		"info":  true,
+		"warn":  true,
+		"error": true,
+		"fatal": true,
+	}
+	if c.LogLevel != "" && !validLogLevels[c.LogLevel] {
+		return fmt.Errorf("invalid log level: %s", c.LogLevel)
+	}
+
+	// validate server list
+	if len(c.Servers) == 0 {
+		return errors.New("at least one server must be configured")
+	}
+	for _, server := range c.Servers {
+		if server.Address == "" {
+			return errors.New("server address cannot be empty")
+		}
+		if c.BalancerType == "weighted_round_robin" && server.Weight <= 0 {
+			return fmt.Errorf("invalid weight for server %s: %d", server.Address, server.Weight)
+		}
+	}
+
+	// validate health check config
+	if c.HealthCheck.Interval <= 0 {
+		return errors.New("health check interval must be positive")
+	}
+	if c.HealthCheck.Timeout <= 0 {
+		return errors.New("health check timeout must be positive")
+	}
+	if c.HealthCheck.Timeout >= c.HealthCheck.Interval {
+		return errors.New("health check timeout must be less than interval")
+	}
+
+	return nil
 }

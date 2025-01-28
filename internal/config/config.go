@@ -68,18 +68,12 @@ func (c *Config) LoadFromFile(path string) error {
 	// Decide whether to use YAML or JSON based on the file extension
 	switch filepath.Ext(path) {
 	case ".yaml", ".yml":
-		if err := yaml.Unmarshal(data, c); err != nil {
-			return err
-		}
+		return yaml.Unmarshal(data, c)
 	case ".json":
-		if err := json.Unmarshal(data, c); err != nil {
-			return err
-		}
+		return json.Unmarshal(data, c)
 	default:
 		return errors.New("unsupported config file format")
 	}
-
-	return c.validate()
 }
 
 // SaveToFile saves configuration to a file
@@ -185,8 +179,7 @@ func (cw *ConfigWatcher) checkForUpdate() {
 
 	if fileInfo.ModTime().After(cw.lastMod) {
 		cw.lastMod = fileInfo.ModTime()
-		cfg := NewConfig()
-		if err := cfg.LoadFromFile(cw.filePath); err != nil {
+		if err := Validate(cw.filePath); err != nil {
 			logger := lg.GetInstance()
 			logger.Error("update config error - type: %T, detail: %v", err, err)
 
@@ -199,6 +192,11 @@ func (cw *ConfigWatcher) checkForUpdate() {
 			return
 		}
 
+		cfg := NewConfig()
+		if err := cfg.LoadFromFile(cw.filePath); err != nil {
+			return
+		}
+
 		for _, watcher := range cw.watchers {
 			watcher(cfg)
 		}
@@ -206,7 +204,13 @@ func (cw *ConfigWatcher) checkForUpdate() {
 }
 
 // validate validate config
-func (c *Config) validate() error {
+func Validate(filePath string) error {
+	c := NewConfig()
+
+	if err := c.LoadFromFile(filePath); err != nil {
+		return err
+	}
+
 	// validate listen address
 	if c.ListenAddr == "" {
 		return errors.New("listen address cannot be empty")

@@ -19,6 +19,9 @@ import (
 func main() {
 	// Load configuration
 	cfg := config.NewConfig()
+	if err := config.Validate("configs/config.yaml"); err != nil {
+		log.Fatalf("config error - %v", err)
+	}
 	if err := cfg.LoadFromFile("configs/config.yaml"); err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}

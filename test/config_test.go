@@ -278,8 +278,7 @@ health_check:
 		t.Run(tt.name, func(t *testing.T) {
 			configFile := createTempConfigFile(t, tt.config)
 
-			cfg := config.NewConfig()
-			err := cfg.LoadFromFile(configFile)
+			err := config.Validate(configFile)
 			if err == nil {
 				t.Fatal("Expected error but got nil")
 			}

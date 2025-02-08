@@ -1,9 +1,8 @@
-package test
+package balancer
 
 import (
 	"testing"
 
-	"nexus/internal/balancer"
 	"nexus/internal/config"
 )
 
@@ -47,7 +46,7 @@ func TestLeastConnectionsBalancer(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc // Prevent closure issues
 		t.Run(tc.name, func(t *testing.T) {
-			balancer := balancer.NewLeastConnectionsBalancer()
+			balancer := NewLeastConnectionsBalancer()
 			for _, server := range tc.servers {
 				for serverAddr, connCount := range server {
 					balancer.AddWithConnCount(serverAddr, connCount)
@@ -109,7 +108,7 @@ func TestLeastConnections_UpdateServers(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			balancer := balancer.NewLeastConnectionsBalancer()
+			balancer := NewLeastConnectionsBalancer()
 			balancer.UpdateServers(tc.initialServers)
 
 			// update servers

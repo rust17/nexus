@@ -1,4 +1,4 @@
-package test
+package config
 
 import (
 	"errors"
@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"nexus/internal/config"
 )
 
 func TestConfigLoad_ValidConfig(t *testing.T) {
@@ -29,7 +27,7 @@ log_level: "debug"
 
 	configFile := createTempConfigFile(t, configContent)
 
-	cfg := config.NewConfig()
+	cfg := NewConfig()
 	if err := cfg.LoadFromFile(configFile); err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
@@ -64,7 +62,7 @@ log_level: "debug"
 func TestConfigLoad_InvalidFile(t *testing.T) {
 	t.Parallel()
 
-	cfg := config.NewConfig()
+	cfg := NewConfig()
 	err := cfg.LoadFromFile("nonexistent.yaml")
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("Expected os.ErrNotExist, got %v", err)
@@ -79,24 +77,11 @@ func TestInvalidConfigFormat(t *testing.T) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	cfg := config.NewConfig()
+	cfg := NewConfig()
 	err = cfg.LoadFromFile(tmpFile.Name())
 	if err == nil {
 		t.Error("Expected error for invalid config format")
 	}
-}
-
-func createTempConfigFile(t *testing.T, content string) string {
-	tmpFile, err := os.CreateTemp("", "config-*.yaml")
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	t.Cleanup(func() { os.Remove(tmpFile.Name()) })
-
-	if _, err := tmpFile.WriteString(content); err != nil {
-		t.Fatalf("Failed to write config file: %v", err)
-	}
-	return tmpFile.Name()
 }
 
 func TestConfigHotReload(t *testing.T) {
@@ -116,10 +101,10 @@ log_level: "info"
 	defer os.Remove(configFile)
 
 	// 初始化配置监控器
-	watcher := config.NewConfigWatcher(configFile)
+	watcher := NewConfigWatcher(configFile)
 
 	var updated bool
-	watcher.Watch(func(cfg *config.Config) {
+	watcher.Watch(func(cfg *Config) {
 		updated = true
 	})
 
@@ -278,7 +263,7 @@ health_check:
 		t.Run(tt.name, func(t *testing.T) {
 			configFile := createTempConfigFile(t, tt.config)
 
-			err := config.Validate(configFile)
+			err := Validate(configFile)
 			if err == nil {
 				t.Fatal("Expected error but got nil")
 			}

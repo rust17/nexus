@@ -141,7 +141,7 @@ health_check:
   timeout: 2s
 log_level: "info"
 `
-	configFile := createTempConfigFile(t, configContent)
+	configFile := config.CreateTempConfigFile(t, configContent)
 	defer os.Remove(configFile)
 
 	// init config watcher

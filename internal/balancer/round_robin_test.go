@@ -1,9 +1,8 @@
-package test
+package balancer
 
 import (
 	"testing"
 
-	"nexus/internal/balancer"
 	"nexus/internal/config"
 )
 
@@ -46,7 +45,7 @@ func TestRoundRobinBalancer(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			balancer := balancer.NewRoundRobinBalancer()
+			balancer := NewRoundRobinBalancer()
 			for _, server := range tc.servers {
 				balancer.Add(server)
 			}
@@ -81,7 +80,7 @@ func TestRoundRobinBalancer(t *testing.T) {
 }
 
 func TestEmptyBalancer(t *testing.T) {
-	balancer := balancer.NewRoundRobinBalancer()
+	balancer := NewRoundRobinBalancer()
 	_, err := balancer.Next()
 	if err == nil {
 		t.Error("Expected error when no servers are available")
@@ -121,7 +120,7 @@ func TestBalancer_UpdateRoundRobinServers(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			balancer := balancer.NewRoundRobinBalancer()
+			balancer := NewRoundRobinBalancer()
 			balancer.UpdateServers(tc.initialServers)
 			balancer.UpdateServers(tc.updatedServers)
 

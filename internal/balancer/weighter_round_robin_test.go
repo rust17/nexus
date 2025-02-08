@@ -1,21 +1,20 @@
-package test
+package balancer
 
 import (
 	"testing"
 
-	"nexus/internal/balancer"
 	"nexus/internal/config"
 )
 
 func TestWeightedRoundRobinBalancer(t *testing.T) {
 	testCases := []struct {
 		name          string
-		servers       []balancer.WeightedServer
+		servers       []WeightedServer
 		expectedOrder []string
 	}{
 		{
 			name: "Basic Weighted Round Robin",
-			servers: []balancer.WeightedServer{
+			servers: []WeightedServer{
 				{Server: "http://server1:8080", Weight: 3},
 				{Server: "http://server2:8080", Weight: 2},
 			},
@@ -33,7 +32,7 @@ func TestWeightedRoundRobinBalancer(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc // Prevent closure issues
 		t.Run(tc.name, func(t *testing.T) {
-			balancer := balancer.NewWeightedRoundRobinBalancer()
+			balancer := NewWeightedRoundRobinBalancer()
 			for _, server := range tc.servers {
 				balancer.AddWithWeight(server.Server, server.Weight)
 			}
@@ -92,7 +91,7 @@ func TestWeightedRoundRobin_UpdateServers(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			balancer := balancer.NewWeightedRoundRobinBalancer()
+			balancer := NewWeightedRoundRobinBalancer()
 			balancer.UpdateServers(tc.initialServers)
 
 			// update servers

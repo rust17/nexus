@@ -1,12 +1,10 @@
-package test
+package healthcheck
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"nexus/internal/healthcheck"
 )
 
 const (
@@ -58,7 +56,7 @@ func TestHealthChecker(t *testing.T) {
 			defer ts.Close()
 
 			// Create health checker
-			checker := healthcheck.NewHealthChecker(healthCheckInterval, healthCheckTimeout)
+			checker := NewHealthChecker(healthCheckInterval, healthCheckTimeout)
 			checker.AddServer(ts.URL)
 			go checker.Start()
 			defer checker.Stop()
@@ -90,7 +88,7 @@ func TestHealthChecker_RemoveServer(t *testing.T) {
 	defer ts.Close()
 
 	// Create health checker
-	checker := healthcheck.NewHealthChecker(healthCheckInterval, healthCheckTimeout)
+	checker := NewHealthChecker(healthCheckInterval, healthCheckTimeout)
 	checker.AddServer(ts.URL)
 	go checker.Start()
 	defer checker.Stop()
@@ -106,7 +104,7 @@ func TestHealthChecker_RemoveServer(t *testing.T) {
 }
 
 func TestHealthChecker_UpdateConfig(t *testing.T) {
-	healthChecker := healthcheck.NewHealthChecker(10*time.Second, 1*time.Second)
+	healthChecker := NewHealthChecker(10*time.Second, 1*time.Second)
 	healthChecker.AddServer("http://server1:8080")
 
 	// Update interval and timeout

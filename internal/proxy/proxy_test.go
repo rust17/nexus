@@ -1,4 +1,4 @@
-package test
+package proxy
 
 import (
 	"bytes"
@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	lb "nexus/internal/balancer"
-	px "nexus/internal/proxy"
 )
 
 const (
@@ -56,7 +55,7 @@ func TestProxy_ServeHTTP(t *testing.T) {
 				balancer.Add(backend.URL)
 			}
 
-			proxy := px.NewProxy(balancer)
+			proxy := NewProxy(balancer)
 
 			req := httptest.NewRequest("GET", "/", nil)
 			w := httptest.NewRecorder()
@@ -79,7 +78,7 @@ func TestProxy_ErrorHandler(t *testing.T) {
 	t.Parallel()
 
 	balancer := lb.NewBalancer("round_robin")
-	proxy := px.NewProxy(balancer)
+	proxy := NewProxy(balancer)
 
 	customError := false
 	proxy.SetErrorHandler(func(w http.ResponseWriter, r *http.Request, err error) {

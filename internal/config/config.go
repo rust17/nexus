@@ -295,3 +295,26 @@ func (c *Config) UpdateBalancerType(bType string) error {
 	c.BalancerType = bType
 	return nil
 }
+
+// UpdateServers 更新后端服务器列表
+func (c *Config) UpdateServers(servers []ServerConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(servers) == 0 {
+		return errors.New("server list cannot be empty")
+	}
+
+	// 验证每个服务器配置
+	for _, s := range servers {
+		if s.Address == "" {
+			return errors.New("server address cannot be empty")
+		}
+		if c.BalancerType == "weighted_round_robin" && s.Weight <= 0 {
+			return fmt.Errorf("invalid weight %d for server %s", s.Weight, s.Address)
+		}
+	}
+
+	c.Servers = append(c.Servers[:0], servers...)
+	return nil
+}

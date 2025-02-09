@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -393,6 +394,111 @@ func TestUpdateBalancerType(t *testing.T) {
 		}
 		if updateCount == 0 {
 			t.Error("No successful updates detected")
+		}
+	})
+}
+
+func TestUpdateServers(t *testing.T) {
+	t.Parallel()
+
+	cfg := NewConfig()
+	cfg.UpdateBalancerType("round_robin") // 初始化负载均衡类型
+
+	// 初始值测试
+	if len(cfg.GetServers()) != 0 {
+		t.Errorf("Expected empty servers, got %v", cfg.GetServers())
+	}
+
+	// 正常更新测试
+	t.Run("ValidServers", func(t *testing.T) {
+		validServers := []ServerConfig{
+			{Address: "http://server1", Weight: 1},
+			{Address: "http://server2", Weight: 1},
+		}
+
+		if err := cfg.UpdateServers(validServers); err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+
+		if actual := cfg.GetServers(); !reflect.DeepEqual(actual, validServers) {
+			t.Errorf("Expected %v, got %v", validServers, actual)
+		}
+	})
+
+	// 异常情况测试
+	t.Run("InvalidCases", func(t *testing.T) {
+		testCases := []struct {
+			name        string
+			servers     []ServerConfig
+			expectedErr string
+			setup       func()
+		}{
+			{
+				name:        "EmptyList",
+				servers:     []ServerConfig{},
+				expectedErr: "server list cannot be empty",
+			},
+			{
+				name: "EmptyAddress",
+				servers: []ServerConfig{
+					{Address: "", Weight: 1},
+				},
+				expectedErr: "server address cannot be empty",
+			},
+			{
+				name: "InvalidWeightForWRR",
+				servers: []ServerConfig{
+					{Address: "http://server1", Weight: 0},
+				},
+				setup:       func() { cfg.UpdateBalancerType("weighted_round_robin") },
+				expectedErr: "invalid weight 0",
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				if tc.setup != nil {
+					tc.setup()
+				}
+				err := cfg.UpdateServers(tc.servers)
+				if err == nil || !strings.Contains(err.Error(), tc.expectedErr) {
+					t.Errorf("Expected error containing %q, got %v", tc.expectedErr, err)
+				}
+			})
+		}
+	})
+
+	// 并发更新测试
+	t.Run("ConcurrentUpdates", func(t *testing.T) {
+		var wg sync.WaitGroup
+		testServers := [][]ServerConfig{
+			{{Address: "http://serverA", Weight: 1}},
+			{{Address: "http://serverB", Weight: 2}},
+			{{Address: "http://serverC", Weight: 3}},
+		}
+
+		for i := 0; i < 100; i++ {
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				servers := testServers[index%3]
+				cfg.UpdateServers(servers)
+				_ = cfg.GetServers()
+			}(i)
+		}
+		wg.Wait()
+
+		// 验证最终一致性
+		finalServers := cfg.GetServers()
+		valid := false
+		for _, s := range testServers {
+			if reflect.DeepEqual(finalServers, s) {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			t.Errorf("Unexpected final server list: %v", finalServers)
 		}
 	})
 }

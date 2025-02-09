@@ -1,2 +1,9 @@
 pb/*.pb.go
 coverage.out
+
+# Nexus UI
+web/node_modules
+web/.vscode
+web/.DS_Store
+web/.env
+web/.env.local

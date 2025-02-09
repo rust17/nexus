@@ -1,0 +1,14 @@
+// 覆盖 Element Plus 变量
+$--color-primary: #409EFF;
+$--border-radius-base: 4px;
+
+// 全局样式
+body {
+  margin: 0;
+  font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+}
+
+.el-button + .el-button {
+  margin-left: 12px;
+}

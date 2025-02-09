@@ -338,3 +338,25 @@ func (c *Config) UpdateHealthCheck(interval, timeout time.Duration) error {
 	c.HealthCheck.Timeout = timeout
 	return nil
 }
+
+// UpdateLogLevel 更新日志级别配置
+func (c *Config) UpdateLogLevel(level string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	validLevels := map[string]bool{
+		"debug": true,
+		"info":  true,
+		"warn":  true,
+		"error": true,
+		"fatal": true,
+		"":      true, // 允许空值使用默认级别
+	}
+
+	if !validLevels[level] {
+		return fmt.Errorf("invalid log level: %s", level)
+	}
+
+	c.LogLevel = level
+	return nil
+}

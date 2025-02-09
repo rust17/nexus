@@ -599,3 +599,88 @@ func TestUpdateHealthCheck(t *testing.T) {
 		}
 	})
 }
+
+func TestUpdateLogLevel(t *testing.T) {
+	t.Parallel()
+
+	cfg := NewConfig()
+
+	// 初始值测试
+	if cfg.GetLogLevel() != "" {
+		t.Errorf("Expected empty log level, got %s", cfg.GetLogLevel())
+	}
+
+	// 正常更新测试
+	t.Run("ValidLevels", func(t *testing.T) {
+		testCases := []struct {
+			input    string
+			expected string
+		}{
+			{"debug", "debug"},
+			{"info", "info"},
+			{"warn", "warn"},
+			{"error", "error"},
+			{"fatal", "fatal"},
+			{"", ""},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.input, func(t *testing.T) {
+				if err := cfg.UpdateLogLevel(tc.input); err != nil {
+					t.Fatalf("Unexpected error: %v", err)
+				}
+				if actual := cfg.GetLogLevel(); actual != tc.expected {
+					t.Errorf("Expected %s, got %s", tc.expected, actual)
+				}
+			})
+		}
+	})
+
+	// 无效级别测试
+	t.Run("InvalidLevel", func(t *testing.T) {
+		err := cfg.UpdateLogLevel("invalid")
+		if err == nil {
+			t.Fatal("Expected error but got nil")
+		}
+		expectedErr := "invalid log level"
+		if !strings.Contains(err.Error(), expectedErr) {
+			t.Errorf("Expected error to contain %q, got %q", expectedErr, err.Error())
+		}
+	})
+
+	// 并发更新测试
+	t.Run("ConcurrentUpdates", func(t *testing.T) {
+		var wg sync.WaitGroup
+		levels := []string{"debug", "info", "warn", "error", "fatal"}
+		total := 100
+
+		// 重置配置确保测试独立性
+		cfg = NewConfig()
+
+		for i := 0; i < total; i++ {
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				level := levels[index%5]
+				cfg.UpdateLogLevel(level)
+			}(i)
+		}
+
+		wg.Wait()
+
+		// 验证最终结果合法性
+		finalLevel := cfg.GetLogLevel()
+		if finalLevel != "" {
+			valid := false
+			for _, l := range levels {
+				if finalLevel == l {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				t.Errorf("Unexpected final log level: %s", finalLevel)
+			}
+		}
+	})
+}

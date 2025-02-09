@@ -264,3 +264,15 @@ func Validate(filePath string) error {
 
 	return nil
 }
+
+// UpdateListenAddr updates the listening address
+func (c *Config) UpdateListenAddr(addr string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if addr == "" {
+		return errors.New("listen address cannot be empty")
+	}
+	c.ListenAddr = addr
+	return nil
+}

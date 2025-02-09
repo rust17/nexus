@@ -2,8 +2,10 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -273,4 +275,34 @@ health_check:
 			}
 		})
 	}
+}
+
+func TestUpdateListenAddr(t *testing.T) {
+	t.Parallel()
+
+	cfg := NewConfig()
+
+	// 初始值测试
+	if cfg.GetListenAddr() != "" {
+		t.Errorf("Expected empty listen address, got %s", cfg.GetListenAddr())
+	}
+
+	// 正常更新测试
+	expectedAddr := ":8081"
+	cfg.UpdateListenAddr(expectedAddr)
+	if actual := cfg.GetListenAddr(); actual != expectedAddr {
+		t.Errorf("Expected %s, got %s", expectedAddr, actual)
+	}
+
+	// 并发更新测试
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(addr string) {
+			defer wg.Done()
+			cfg.UpdateListenAddr(addr)
+			_ = cfg.GetListenAddr()
+		}(fmt.Sprintf(":%d", 8080+i))
+	}
+	wg.Wait()
 }

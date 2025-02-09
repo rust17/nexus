@@ -502,3 +502,100 @@ func TestUpdateServers(t *testing.T) {
 		}
 	})
 }
+
+func TestUpdateHealthCheck(t *testing.T) {
+	t.Parallel()
+
+	cfg := NewConfig()
+
+	// 初始值测试
+	initialHC := cfg.GetHealthCheckConfig()
+	if initialHC.Interval != 0 || initialHC.Timeout != 0 {
+		t.Errorf("Expected empty health check config, got %+v", initialHC)
+	}
+
+	// 正常更新测试
+	t.Run("ValidConfig", func(t *testing.T) {
+		testCases := []struct {
+			interval time.Duration
+			timeout  time.Duration
+		}{
+			{10 * time.Second, 2 * time.Second},
+			{5 * time.Minute, 1 * time.Minute},
+			{30 * time.Second, 5 * time.Second},
+		}
+
+		for _, tc := range testCases {
+			t.Run(fmt.Sprintf("%v/%v", tc.interval, tc.timeout), func(t *testing.T) {
+				if err := cfg.UpdateHealthCheck(tc.interval, tc.timeout); err != nil {
+					t.Fatalf("Unexpected error: %v", err)
+				}
+				hc := cfg.GetHealthCheckConfig()
+				if hc.Interval != tc.interval || hc.Timeout != tc.timeout {
+					t.Errorf("Expected %v/%v, got %v/%v",
+						tc.interval, tc.timeout, hc.Interval, hc.Timeout)
+				}
+			})
+		}
+	})
+
+	// 异常情况测试
+	t.Run("InvalidConfig", func(t *testing.T) {
+		testCases := []struct {
+			name     string
+			interval time.Duration
+			timeout  time.Duration
+			wantErr  string
+		}{
+			{"NegativeInterval", -time.Second, 2 * time.Second, "interval must be positive"},
+			{"ZeroTimeout", 5 * time.Second, 0, "timeout must be positive"},
+			{"TimeoutTooLarge", 5 * time.Second, 10 * time.Second, "timeout must be less"},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				err := cfg.UpdateHealthCheck(tc.interval, tc.timeout)
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Errorf("Expected error containing %q, got %v", tc.wantErr, err)
+				}
+			})
+		}
+	})
+
+	// 并发更新测试
+	t.Run("ConcurrentUpdates", func(t *testing.T) {
+		var wg sync.WaitGroup
+		testCases := []struct {
+			interval time.Duration
+			timeout  time.Duration
+		}{
+			{10 * time.Second, 2 * time.Second},
+			{5 * time.Second, 1 * time.Second},
+			{30 * time.Second, 5 * time.Second},
+		}
+
+		for i := 0; i < 100; i++ {
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				tc := testCases[index%3]
+				cfg.UpdateHealthCheck(tc.interval, tc.timeout)
+				_ = cfg.GetHealthCheckConfig()
+			}(i)
+		}
+		wg.Wait()
+
+		// 验证最终一致性
+		finalHC := cfg.GetHealthCheckConfig()
+		valid := false
+		for _, tc := range testCases {
+			if finalHC.Interval == tc.interval && finalHC.Timeout == tc.timeout {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			t.Errorf("Unexpected final health check config: %+v", finalHC)
+		}
+	})
+}

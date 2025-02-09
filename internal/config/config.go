@@ -318,3 +318,23 @@ func (c *Config) UpdateServers(servers []ServerConfig) error {
 	c.Servers = append(c.Servers[:0], servers...)
 	return nil
 }
+
+// UpdateHealthCheck 更新健康检查配置
+func (c *Config) UpdateHealthCheck(interval, timeout time.Duration) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if interval <= 0 {
+		return errors.New("health check interval must be positive")
+	}
+	if timeout <= 0 {
+		return errors.New("health check timeout must be positive")
+	}
+	if timeout >= interval {
+		return errors.New("health check timeout must be less than interval")
+	}
+
+	c.HealthCheck.Interval = interval
+	c.HealthCheck.Timeout = timeout
+	return nil
+}

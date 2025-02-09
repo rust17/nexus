@@ -296,7 +296,8 @@ func TestUpdateListenAddr(t *testing.T) {
 
 	// 并发更新测试
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
+	total := 100
+	for i := 0; i < total; i++ {
 		wg.Add(1)
 		go func(addr string) {
 			defer wg.Done()
@@ -305,4 +306,93 @@ func TestUpdateListenAddr(t *testing.T) {
 		}(fmt.Sprintf(":%d", 8080+i))
 	}
 	wg.Wait()
+
+	// 验证最终结果
+	var updateCount int
+	for i := 0; i < total; i++ {
+		if cfg.GetListenAddr() == fmt.Sprintf(":%d", 8080+i) {
+			updateCount++
+		}
+	}
+	if updateCount == 0 {
+		t.Error("No successful updates detected")
+	}
+}
+
+func TestUpdateBalancerType(t *testing.T) {
+	t.Parallel()
+
+	cfg := NewConfig()
+
+	// 初始值测试
+	if cfg.GetBalancerType() != "" {
+		t.Errorf("Expected empty balancer type, got %s", cfg.GetBalancerType())
+	}
+
+	// 正常更新测试
+	t.Run("ValidTypes", func(t *testing.T) {
+		testCases := []struct {
+			input    string
+			expected string
+		}{
+			{"round_robin", "round_robin"},
+			{"weighted_round_robin", "weighted_round_robin"},
+			{"least_connections", "least_connections"},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.input, func(t *testing.T) {
+				if err := cfg.UpdateBalancerType(tc.input); err != nil {
+					t.Fatalf("Unexpected error: %v", err)
+				}
+				if actual := cfg.GetBalancerType(); actual != tc.expected {
+					t.Errorf("Expected %s, got %s", tc.expected, actual)
+				}
+			})
+		}
+	})
+
+	// 无效类型测试
+	t.Run("InvalidType", func(t *testing.T) {
+		err := cfg.UpdateBalancerType("invalid_type")
+		if err == nil {
+			t.Fatal("Expected error but got nil")
+		}
+		expectedErr := "invalid balancer type"
+		if !strings.Contains(err.Error(), expectedErr) {
+			t.Errorf("Expected error to contain %q, got %q", expectedErr, err.Error())
+		}
+	})
+
+	// 并发更新测试
+	t.Run("ConcurrentUpdates", func(t *testing.T) {
+		var wg sync.WaitGroup
+		types := []string{"round_robin", "weighted_round_robin", "least_connections"}
+		total := 100
+
+		// 重置配置确保测试独立性
+		cfg = NewConfig()
+
+		for i := 0; i < total; i++ {
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				bType := types[index%3]
+				cfg.UpdateBalancerType(bType)
+			}(i)
+		}
+
+		wg.Wait()
+
+		// 验证最终结果
+		var updateCount int
+		for i := 0; i < total; i++ {
+			if cfg.GetBalancerType() == types[i%3] {
+				updateCount++
+			}
+		}
+		if updateCount == 0 {
+			t.Error("No successful updates detected")
+		}
+	})
 }

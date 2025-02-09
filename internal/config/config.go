@@ -276,3 +276,22 @@ func (c *Config) UpdateListenAddr(addr string) error {
 	c.ListenAddr = addr
 	return nil
 }
+
+// UpdateBalancerType updates the load balancer type
+func (c *Config) UpdateBalancerType(bType string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	validTypes := map[string]bool{
+		"round_robin":          true,
+		"weighted_round_robin": true,
+		"least_connections":    true,
+	}
+
+	if !validTypes[bType] {
+		return fmt.Errorf("invalid balancer type: %s", bType)
+	}
+
+	c.BalancerType = bType
+	return nil
+}

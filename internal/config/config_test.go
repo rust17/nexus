@@ -178,7 +178,7 @@ health_check:
   interval: 10s
   timeout: 2s
 `,
-			expectedErr: "at least one server must be configured",
+			expectedErr: "server list cannot be empty",
 		},
 		{
 			name: "EmptyServerAddress",
@@ -451,7 +451,7 @@ func TestUpdateServers(t *testing.T) {
 					{Address: "http://server1", Weight: 0},
 				},
 				setup:       func() { cfg.UpdateBalancerType("weighted_round_robin") },
-				expectedErr: "invalid weight 0",
+				expectedErr: "invalid weight for server http://server1: 0",
 			},
 		}
 

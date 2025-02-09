@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -203,75 +202,13 @@ func (cw *ConfigWatcher) checkForUpdate() {
 	}
 }
 
-// validate validate config
-func Validate(filePath string) error {
-	c := NewConfig()
-
-	if err := c.LoadFromFile(filePath); err != nil {
-		return err
-	}
-
-	// validate listen address
-	if c.ListenAddr == "" {
-		return errors.New("listen address cannot be empty")
-	}
-
-	// validate balancer type
-	validBalancerTypes := map[string]bool{
-		"round_robin":          true,
-		"weighted_round_robin": true,
-		"least_connections":    true,
-	}
-	if !validBalancerTypes[c.BalancerType] {
-		return fmt.Errorf("invalid balancer type: %s", c.BalancerType)
-	}
-
-	// validate log level
-	validLogLevels := map[string]bool{
-		"debug": true,
-		"info":  true,
-		"warn":  true,
-		"error": true,
-		"fatal": true,
-	}
-	if c.LogLevel != "" && !validLogLevels[c.LogLevel] {
-		return fmt.Errorf("invalid log level: %s", c.LogLevel)
-	}
-
-	// validate server list
-	if len(c.Servers) == 0 {
-		return errors.New("at least one server must be configured")
-	}
-	for _, server := range c.Servers {
-		if server.Address == "" {
-			return errors.New("server address cannot be empty")
-		}
-		if c.BalancerType == "weighted_round_robin" && server.Weight <= 0 {
-			return fmt.Errorf("invalid weight for server %s: %d", server.Address, server.Weight)
-		}
-	}
-
-	// validate health check config
-	if c.HealthCheck.Interval <= 0 {
-		return errors.New("health check interval must be positive")
-	}
-	if c.HealthCheck.Timeout <= 0 {
-		return errors.New("health check timeout must be positive")
-	}
-	if c.HealthCheck.Timeout >= c.HealthCheck.Interval {
-		return errors.New("health check timeout must be less than interval")
-	}
-
-	return nil
-}
-
 // UpdateListenAddr updates the listening address
 func (c *Config) UpdateListenAddr(addr string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if addr == "" {
-		return errors.New("listen address cannot be empty")
+	if err := validateListenAddr(addr); err != nil {
+		return err
 	}
 	c.ListenAddr = addr
 	return nil
@@ -282,16 +219,9 @@ func (c *Config) UpdateBalancerType(bType string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	validTypes := map[string]bool{
-		"round_robin":          true,
-		"weighted_round_robin": true,
-		"least_connections":    true,
+	if err := validateBalancerType(bType); err != nil {
+		return err
 	}
-
-	if !validTypes[bType] {
-		return fmt.Errorf("invalid balancer type: %s", bType)
-	}
-
 	c.BalancerType = bType
 	return nil
 }
@@ -301,18 +231,8 @@ func (c *Config) UpdateServers(servers []ServerConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if len(servers) == 0 {
-		return errors.New("server list cannot be empty")
-	}
-
-	// 验证每个服务器配置
-	for _, s := range servers {
-		if s.Address == "" {
-			return errors.New("server address cannot be empty")
-		}
-		if c.BalancerType == "weighted_round_robin" && s.Weight <= 0 {
-			return fmt.Errorf("invalid weight %d for server %s", s.Weight, s.Address)
-		}
+	if err := validateServers(servers, c.BalancerType); err != nil {
+		return err
 	}
 
 	c.Servers = append(c.Servers[:0], servers...)
@@ -324,14 +244,8 @@ func (c *Config) UpdateHealthCheck(interval, timeout time.Duration) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if interval <= 0 {
-		return errors.New("health check interval must be positive")
-	}
-	if timeout <= 0 {
-		return errors.New("health check timeout must be positive")
-	}
-	if timeout >= interval {
-		return errors.New("health check timeout must be less than interval")
+	if err := validateHealthCheck(interval, timeout); err != nil {
+		return err
 	}
 
 	c.HealthCheck.Interval = interval
@@ -344,17 +258,8 @@ func (c *Config) UpdateLogLevel(level string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	validLevels := map[string]bool{
-		"debug": true,
-		"info":  true,
-		"warn":  true,
-		"error": true,
-		"fatal": true,
-		"":      true, // 允许空值使用默认级别
-	}
-
-	if !validLevels[level] {
-		return fmt.Errorf("invalid log level: %s", level)
+	if err := validateLogLevel(level); err != nil {
+		return err
 	}
 
 	c.LogLevel = level

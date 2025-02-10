@@ -1,6 +1,7 @@
 package balancer
 
 import (
+	"context"
 	"testing"
 
 	"nexus/internal/config"
@@ -38,7 +39,7 @@ func TestWeightedRoundRobinBalancer(t *testing.T) {
 			}
 
 			for i, expected := range tc.expectedOrder {
-				server, err := balancer.Next()
+				server, err := balancer.Next(context.Background())
 				if err != nil {
 					t.Fatalf("Unexpected error: %v", err)
 				}
@@ -99,7 +100,7 @@ func TestWeightedRoundRobin_UpdateServers(t *testing.T) {
 
 			// verify scheduling order
 			for i, expected := range tc.expectedOrder {
-				server, err := balancer.Next()
+				server, err := balancer.Next(context.Background())
 				if err != nil {
 					t.Fatalf("Unexpected error: %v", err)
 				}
@@ -109,7 +110,7 @@ func TestWeightedRoundRobin_UpdateServers(t *testing.T) {
 			}
 
 			// verify index reset
-			firstServer, err := balancer.Next()
+			firstServer, err := balancer.Next(context.Background())
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}

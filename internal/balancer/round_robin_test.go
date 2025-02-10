@@ -1,6 +1,7 @@
 package balancer
 
 import (
+	"context"
 	"testing"
 
 	"nexus/internal/config"
@@ -55,7 +56,7 @@ func TestRoundRobinBalancer(t *testing.T) {
 			}
 
 			for i, expected := range tc.expectedOrder {
-				server, err := balancer.Next()
+				server, err := balancer.Next(context.Background())
 				if err != nil {
 					t.Fatalf("Unexpected error: %v", err)
 				}
@@ -66,7 +67,7 @@ func TestRoundRobinBalancer(t *testing.T) {
 
 			if tc.removeServer != "" {
 				for i := 0; i < 3; i++ {
-					server, err := balancer.Next()
+					server, err := balancer.Next(context.Background())
 					if err != nil {
 						t.Fatalf("Unexpected error after remove: %v", err)
 					}
@@ -81,7 +82,7 @@ func TestRoundRobinBalancer(t *testing.T) {
 
 func TestEmptyBalancer(t *testing.T) {
 	balancer := NewRoundRobinBalancer()
-	_, err := balancer.Next()
+	_, err := balancer.Next(context.Background())
 	if err == nil {
 		t.Error("Expected error when no servers are available")
 	}

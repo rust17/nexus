@@ -9,6 +9,13 @@ import (
 	"time"
 
 	lb "nexus/internal/balancer"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -157,5 +164,63 @@ func TestProxy_ErrorHandler(t *testing.T) {
 				t.Errorf("Expected status %d, got %d", tt.expectStatus, resp.StatusCode)
 			}
 		})
+	}
+}
+
+func TestTracingMiddleware(t *testing.T) {
+	// 初始化测试导出器
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithSyncer(exporter),
+	)
+	// 设置全局TracerProvider
+	otel.SetTextMapPropagator(
+		propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		))
+
+	// 创建测试代理
+	b := lb.NewRoundRobinBalancer()
+	b.Add("http://backend1")
+	p := NewProxy(b)
+	p.tracer = tp.Tracer("test")
+
+	// 创建测试请求
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+
+	// 执行中间件
+	p.tracingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 验证追踪头存在
+		if r.Header.Get("traceparent") == "" {
+			t.Error("Missing traceparent header")
+		}
+		// 验证追踪上下文
+		ctx := r.Context()
+		if span := trace.SpanFromContext(ctx); !span.IsRecording() {
+			t.Error("Missing active span in context")
+		}
+	})).ServeHTTP(rec, req)
+
+	// 验证生成的Span
+	spans := exporter.GetSpans()
+	if len(spans) != 1 {
+		t.Fatalf("Expected 1 span, got %d", len(spans))
+	}
+
+	span := spans[0]
+	expectedAttributes := []attribute.KeyValue{
+		attribute.String("lb.strategy", "round_robin"),
+		attribute.Int("backend.count", 1),
+	}
+
+	for i, attr := range expectedAttributes {
+		if span.Attributes[i].Key != attr.Key {
+			t.Errorf("Missing or incorrect attribute %s: %v", attr.Key, span.Attributes[i].Value)
+		}
+		if span.Attributes[i].Value != attr.Value {
+			t.Errorf("Missing or incorrect attribute %s: %v", attr.Key, span.Attributes[i].Value)
+		}
 	}
 }

@@ -1,6 +1,7 @@
 package balancer
 
 import (
+	"context"
 	"errors"
 	"nexus/internal/config"
 	"sync"
@@ -32,7 +33,7 @@ func NewWeightedRoundRobinBalancer() *WeightedRoundRobinBalancer {
 }
 
 // Next returns the next available server address based on weight
-func (b *WeightedRoundRobinBalancer) Next() (string, error) {
+func (b *WeightedRoundRobinBalancer) Next(ctx context.Context) (string, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -44,6 +45,9 @@ func (b *WeightedRoundRobinBalancer) Next() (string, error) {
 		server := b.servers[b.index]
 		if b.current < server.Weight {
 			b.current++
+
+			traceBackend(ctx, server.Server, b.index)
+
 			return server.Server, nil
 		}
 

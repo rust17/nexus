@@ -1,6 +1,7 @@
 package balancer
 
 import (
+	"context"
 	"errors"
 	"math"
 	"nexus/internal/config"
@@ -27,7 +28,7 @@ func NewLeastConnectionsBalancer() *LeastConnectionsBalancer {
 }
 
 // Next returns the next available server address
-func (b *LeastConnectionsBalancer) Next() (string, error) {
+func (b *LeastConnectionsBalancer) Next(ctx context.Context) (string, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -62,6 +63,9 @@ func (b *LeastConnectionsBalancer) Next() (string, error) {
 
 	// Increment connection count for selected server
 	selectedServer.ConnCount++
+
+	traceBackend(ctx, selectedServer.Server, 0)
+
 	return selectedServer.Server, nil
 }
 

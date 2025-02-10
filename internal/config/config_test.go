@@ -9,6 +9,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestConfigLoad_ValidConfig(t *testing.T) {
@@ -682,5 +685,70 @@ func TestUpdateLogLevel(t *testing.T) {
 				t.Errorf("Unexpected final log level: %s", finalLevel)
 			}
 		}
+	})
+}
+
+// 新增OpenTelemetry配置相关测试
+func TestTelemetryConfig(t *testing.T) {
+	// 测试用例
+	testCases := []struct {
+		name     string
+		config   string
+		expected TelemetryConfig
+	}{
+		{
+			name: "default_opentelemetry",
+			config: `
+telemetry:
+  opentelemetry:
+    enabled: true
+    endpoint: "localhost:4317"
+    service_name: "nexus-service"
+    metrics:
+      interval: 30s`,
+			expected: TelemetryConfig{
+				OpenTelemetry: OpenTelemetryConfig{
+					Enabled:     true,
+					Endpoint:    "localhost:4317",
+					ServiceName: "nexus-service",
+					Metrics: MetricConfig{
+						Interval: 30 * time.Second,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := NewConfig()
+			tmpFile := createTempConfigFile(t, tc.config)
+			require.NoError(t, cfg.LoadFromFile(tmpFile))
+
+			// 验证配置解析
+			telemetryCfg := cfg.GetTelemetryConfig()
+			assert.Equal(t, tc.expected.OpenTelemetry.Enabled, telemetryCfg.OpenTelemetry.Enabled)
+			assert.Equal(t, tc.expected.OpenTelemetry.Endpoint, telemetryCfg.OpenTelemetry.Endpoint)
+			assert.Equal(t, tc.expected.OpenTelemetry.ServiceName, telemetryCfg.OpenTelemetry.ServiceName)
+			assert.Equal(t, tc.expected.OpenTelemetry.Metrics.Interval, telemetryCfg.OpenTelemetry.Metrics.Interval)
+		})
+	}
+
+	// 测试并发读取
+	t.Run("concurrent_access", func(t *testing.T) {
+		cfg := NewConfig()
+		tmpFile := createTempConfigFile(t, testCases[0].config)
+		require.NoError(t, cfg.LoadFromFile(tmpFile))
+
+		var wg sync.WaitGroup
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				telemetryCfg := cfg.GetTelemetryConfig()
+				assert.True(t, telemetryCfg.OpenTelemetry.Enabled)
+			}()
+		}
+		wg.Wait()
 	})
 }

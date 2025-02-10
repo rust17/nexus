@@ -20,3 +20,12 @@ health_check:
 
 # Log level (debug, info, warn, error, fatal)
 log_level: "info"
+
+# Telemetry configuration
+telemetry:
+  opentelemetry:
+    enabled: true
+    endpoint: "otel-collector:4317"
+    service_name: "nexus-lb"
+    metrics:
+      interval: "60s"

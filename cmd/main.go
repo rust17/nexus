@@ -14,6 +14,7 @@ import (
 	"nexus/internal/healthcheck"
 	lg "nexus/internal/logger"
 	px "nexus/internal/proxy"
+	"nexus/internal/telemetry"
 )
 
 func main() {
@@ -62,6 +63,13 @@ func main() {
 		logger.Error("Proxy error: %v", err)
 		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
 	})
+
+	// Initialize OpenTelemetry
+	tel, err := telemetry.NewTelemetry(context.Background(), cfg.Telemetry.OpenTelemetry)
+	if err != nil {
+		log.Fatalf("failed to initialize telemetry: %v", err)
+	}
+	defer tel.Shutdown(context.Background())
 
 	// Register configuration update callback
 	configWatcher.Watch(func(newCfg *config.Config) {

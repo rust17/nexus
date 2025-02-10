@@ -1,6 +1,7 @@
 package balancer
 
 import (
+	"context"
 	"errors"
 	"nexus/internal/config"
 	"sync"
@@ -22,7 +23,7 @@ func NewRoundRobinBalancer() *RoundRobinBalancer {
 }
 
 // Next returns the next available server address
-func (b *RoundRobinBalancer) Next() (string, error) {
+func (b *RoundRobinBalancer) Next(ctx context.Context) (string, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -32,6 +33,9 @@ func (b *RoundRobinBalancer) Next() (string, error) {
 
 	server := b.servers[b.index]
 	b.index = (b.index + 1) % len(b.servers)
+
+	traceBackend(ctx, server, b.index)
+
 	return server, nil
 }
 

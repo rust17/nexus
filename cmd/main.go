@@ -14,6 +14,10 @@ import (
 	"nexus/internal/healthcheck"
 	lg "nexus/internal/logger"
 	px "nexus/internal/proxy"
+	"nexus/internal/telemetry"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 func main() {
@@ -62,6 +66,20 @@ func main() {
 		logger.Error("Proxy error: %v", err)
 		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
 	})
+
+	// Initialize OpenTelemetry
+	tel, err := telemetry.NewTelemetry(context.Background(), cfg.Telemetry.OpenTelemetry)
+	if err != nil {
+		log.Fatalf("failed to initialize telemetry: %v", err)
+	}
+	defer tel.Shutdown(context.Background())
+
+	// 配置追踪传播器
+	otel.SetTextMapPropagator(
+		propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		))
 
 	// Register configuration update callback
 	configWatcher.Watch(func(newCfg *config.Config) {

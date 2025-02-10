@@ -1,6 +1,7 @@
 package balancer
 
 import (
+	"context"
 	"testing"
 
 	"nexus/internal/config"
@@ -54,7 +55,7 @@ func TestLeastConnectionsBalancer(t *testing.T) {
 			}
 
 			for i, expected := range tc.expectedOrder {
-				server, err := balancer.Next()
+				server, err := balancer.Next(context.Background())
 				if err != nil {
 					t.Fatalf("Unexpected error: %v", err)
 				}
@@ -121,7 +122,7 @@ func TestLeastConnections_UpdateServers(t *testing.T) {
 			}
 
 			// verify connection count reset
-			firstServer, err := balancer.Next()
+			firstServer, err := balancer.Next(context.Background())
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}

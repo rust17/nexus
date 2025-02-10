@@ -27,6 +27,9 @@ type Config struct {
 
 	// Log configuration
 	LogLevel string `yaml:"log_level" json:"log_level"`
+
+	// Telemetry configuration
+	Telemetry TelemetryConfig `yaml:"telemetry" json:"telemetry"`
 }
 
 // ServerConfig represents a server with its weight
@@ -39,6 +42,25 @@ type ServerConfig struct {
 type HealthCheckConfig struct {
 	Interval time.Duration `yaml:"interval" json:"interval"`
 	Timeout  time.Duration `yaml:"timeout" json:"timeout"`
+	Protocol string        `yaml:"protocol" json:"protocol"`
+}
+
+// TelemetryConfig telemetry configuration
+type TelemetryConfig struct {
+	OpenTelemetry OpenTelemetryConfig `yaml:"opentelemetry" json:"opentelemetry"`
+}
+
+// OpenTelemetryConfig OpenTelemetry configuration
+type OpenTelemetryConfig struct {
+	Enabled     bool         `yaml:"enabled" json:"enabled"`
+	Endpoint    string       `yaml:"endpoint" json:"endpoint"`
+	ServiceName string       `yaml:"service_name" json:"service_name"`
+	Metrics     MetricConfig `yaml:"metrics" json:"metrics"`
+}
+
+// MetricConfig metric configuration
+type MetricConfig struct {
+	Interval time.Duration `yaml:"interval" json:"interval"`
 }
 
 // ConfigWatcher struct for file monitoring
@@ -138,6 +160,14 @@ func (c *Config) GetLogLevel() string {
 	defer c.mu.RUnlock()
 
 	return c.LogLevel
+}
+
+// GetTelemetryConfig gets the telemetry configuration
+func (c *Config) GetTelemetryConfig() TelemetryConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.Telemetry
 }
 
 // NewConfigWatcher creates a new ConfigWatcher

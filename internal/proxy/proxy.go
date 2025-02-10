@@ -2,10 +2,17 @@ package proxy
 
 import (
 	"net/http"
+	"net/http/httptrace"
 	"net/http/httputil"
 	"net/url"
 	"nexus/internal/balancer"
 	"sync"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Proxy struct represents a reverse proxy
@@ -14,6 +21,7 @@ type Proxy struct {
 	balancer     balancer.Balancer
 	transport    http.RoundTripper
 	errorHandler func(http.ResponseWriter, *http.Request, error)
+	tracer       trace.Tracer
 }
 
 // NewProxy creates a new reverse proxy instance
@@ -21,25 +29,99 @@ func NewProxy(balancer balancer.Balancer) *Proxy {
 	return &Proxy{
 		balancer:  balancer,
 		transport: http.DefaultTransport,
+		tracer:    otel.Tracer("nexus.proxy"),
 	}
 }
 
 // ServeHTTP implements the http.Handler interface
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	target, err := p.balancer.Next()
+	handler := http.HandlerFunc(p.handleRequest)
+	p.tracingMiddleware(handler).ServeHTTP(w, r)
+}
+
+// 新增追踪中间件
+func (p *Proxy) tracingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		// 创建包含负载均衡信息的span
+		ctx, span := p.tracer.Start(ctx, "Proxy.Request",
+			trace.WithAttributes(
+				attribute.String("lb.strategy", p.getBalancerStrategy()),
+				attribute.Int("backend.count", p.getBackendCount()),
+			))
+		defer span.End()
+
+		// 将追踪上下文注入请求
+		propagator := otel.GetTextMapPropagator()
+		propagator.Inject(ctx, propagation.HeaderCarrier(r.Header))
+
+		// 创建追踪客户端
+		traceCtx := httptrace.WithClientTrace(ctx, p.createClientTrace(span))
+		r = r.WithContext(traceCtx)
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (p *Proxy) getBalancerStrategy() string {
+	switch p.balancer.(type) {
+	case *balancer.RoundRobinBalancer:
+		return "round_robin"
+	case *balancer.WeightedRoundRobinBalancer:
+		return "weighted_round_robin"
+	case *balancer.LeastConnectionsBalancer:
+		return "least_connections"
+	default:
+		return "unknown"
+	}
+}
+
+func (p *Proxy) getBackendCount() int {
+	switch b := p.balancer.(type) {
+	case *balancer.RoundRobinBalancer:
+		return len(b.GetServers())
+	case *balancer.WeightedRoundRobinBalancer:
+		return len(b.GetServers())
+	case *balancer.LeastConnectionsBalancer:
+		return len(b.GetServers())
+	default:
+		return 0
+	}
+}
+
+func (p *Proxy) createClientTrace(span trace.Span) *httptrace.ClientTrace {
+	return &httptrace.ClientTrace{
+		GotConn: func(connInfo httptrace.GotConnInfo) {
+			span.AddEvent("Acquired connection",
+				trace.WithAttributes(
+					attribute.Bool("reused", connInfo.Reused),
+					attribute.String("remote", connInfo.Conn.RemoteAddr().String()),
+				))
+		},
+	}
+}
+
+// handleRequest handles the request
+func (p *Proxy) handleRequest(w http.ResponseWriter, r *http.Request) {
+	// 选择后端服务器
+	target, err := p.balancer.Next(r.Context())
 	if err != nil {
 		p.handleError(w, r, err)
 		return
 	}
 
+	// 解析目标 URL
 	targetURL, err := url.Parse(target)
 	if err != nil {
 		p.handleError(w, r, err)
 		return
 	}
 
+	// 转发请求
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
-	proxy.Transport = p.transport
+	proxy.Transport = otelhttp.NewTransport(http.DefaultTransport)
+
 	proxy.ServeHTTP(w, r)
 }
 

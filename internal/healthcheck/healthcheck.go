@@ -2,24 +2,38 @@ package healthcheck
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
+
+	lg "nexus/internal/logger"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // HealthChecker is responsible for health checking
 type HealthChecker struct {
 	mu       sync.RWMutex
-	servers  map[string]bool
+	servers  map[string]*serverInfo
 	interval time.Duration
 	timeout  time.Duration
 	stopChan chan struct{}
 }
 
+type serverInfo struct {
+	address string
+	id      string
+	healthy bool
+}
+
 // NewHealthChecker creates a new health checker
 func NewHealthChecker(interval, timeout time.Duration) *HealthChecker {
 	return &HealthChecker{
-		servers:  make(map[string]bool),
+		servers:  make(map[string]*serverInfo),
 		interval: interval,
 		timeout:  timeout,
 		stopChan: make(chan struct{}),
@@ -27,11 +41,14 @@ func NewHealthChecker(interval, timeout time.Duration) *HealthChecker {
 }
 
 // AddServer adds a server to be health checked
-func (h *HealthChecker) AddServer(server string) {
+func (h *HealthChecker) AddServer(address string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	h.servers[server] = true
+	h.servers[address] = &serverInfo{
+		address: address,
+		healthy: true,
+	}
 }
 
 // RemoveServer removes a server from health checking
@@ -47,7 +64,7 @@ func (h *HealthChecker) IsHealthy(server string) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	return h.servers[server]
+	return h.servers[server] != nil && h.servers[server].healthy
 }
 
 // Start begins the health checking process
@@ -72,42 +89,67 @@ func (h *HealthChecker) Stop() {
 
 // checkAllServers checks the health status of all servers
 func (h *HealthChecker) checkAllServers() {
+	var wg sync.WaitGroup
 	h.mu.RLock()
-	servers := make([]string, 0, len(h.servers))
-	for server := range h.servers {
-		servers = append(servers, server)
+	servers := make([]*serverInfo, 0, len(h.servers))
+	for _, s := range h.servers {
+		servers = append(servers, s)
 	}
 	h.mu.RUnlock()
 
-	var wg sync.WaitGroup
-	for _, server := range servers {
+	for _, s := range servers {
 		wg.Add(1)
-		go func(s string) {
+		go func(s *serverInfo) {
 			defer wg.Done()
-			h.checkServer(s)
-		}(server)
+			ctx, cancel := context.WithTimeout(context.Background(), h.timeout)
+			defer cancel()
+
+			// 创建追踪span
+			ctx, span := otel.Tracer("nexus.healthcheck").Start(ctx, "HealthCheck",
+				trace.WithAttributes(
+					attribute.String("service.address", s.address),
+				))
+			defer span.End()
+
+			startTime := time.Now()
+			err := h.httpCheck(ctx, s.address)
+			duration := time.Since(startTime)
+
+			// 记录检查结果
+			span.SetAttributes(
+				attribute.Bool("check.healthy", err == nil),
+				attribute.Int64("check.duration_ms", duration.Milliseconds()),
+			)
+
+			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
+				lg.GetInstance().Error("[%s] 健康检查失败 - 耗时: %v 错误: %v",
+					s.address, duration.Round(time.Millisecond), err)
+			}
+
+			h.UpdateServerStatus(s.address, err == nil)
+		}(s)
 	}
 	wg.Wait()
 }
 
-// checkServer checks the health status of a single server
-func (h *HealthChecker) checkServer(server string) {
-	ctx, cancel := context.WithTimeout(context.Background(), h.timeout)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "GET", server+"/health", nil)
+func (h *HealthChecker) httpCheck(ctx context.Context, address string) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", address+"/health", nil)
 	if err != nil {
-		h.UpdateServerStatus(server, false)
-		return
+		return err
 	}
 
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		h.UpdateServerStatus(server, false)
-		return
+	if err != nil {
+		return err
 	}
+	defer resp.Body.Close()
 
-	h.UpdateServerStatus(server, true)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("非正常状态码: %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // UpdateServerStatus updates the server's health status
@@ -115,7 +157,9 @@ func (h *HealthChecker) UpdateServerStatus(server string, healthy bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	h.servers[server] = healthy
+	if info, exists := h.servers[server]; exists {
+		info.healthy = healthy
+	}
 }
 
 // UpdateInterval updates the health checking interval

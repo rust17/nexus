@@ -79,3 +79,18 @@ func (c *Config) UpdateLogLevel(level string) error {
 	c.LogLevel = level
 	return nil
 }
+
+// UpdateRoutes 更新路由配置
+func (c *Config) UpdateRoutes(routes []*RouteConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for _, route := range routes {
+		if err := validateRoute(route); err != nil {
+			return err
+		}
+	}
+
+	c.Routes = routes
+	return nil
+}

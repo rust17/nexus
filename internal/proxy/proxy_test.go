@@ -9,6 +9,7 @@ import (
 	"time"
 
 	lb "nexus/internal/balancer"
+	"nexus/internal/service"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -59,7 +60,8 @@ func TestProxy_RequestFlow(t *testing.T) {
 				balancer.Add(backend.URL)
 			}
 
-			proxy := NewProxy(balancer)
+			serviceManager := service.NewServiceManager()
+			proxy := NewProxy(serviceManager)
 
 			req := httptest.NewRequest("GET", "/test", nil)
 			w := httptest.NewRecorder()

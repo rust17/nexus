@@ -6,6 +6,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"nexus/internal/balancer"
+	"nexus/internal/service"
 	"sync"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -17,19 +18,21 @@ import (
 
 // Proxy struct represents a reverse proxy
 type Proxy struct {
-	mu           sync.RWMutex
-	balancer     balancer.Balancer
-	transport    http.RoundTripper
-	errorHandler func(http.ResponseWriter, *http.Request, error)
-	tracer       trace.Tracer
+	mu sync.RWMutex
+	// balancer       balancer.Balancer
+	transport      http.RoundTripper
+	errorHandler   func(http.ResponseWriter, *http.Request, error)
+	tracer         trace.Tracer
+	serviceManager *service.ServiceManager
 }
 
 // NewProxy creates a new reverse proxy instance
-func NewProxy(balancer balancer.Balancer) *Proxy {
+func NewProxy(serviceManager *service.ServiceManager) *Proxy {
 	return &Proxy{
-		balancer:  balancer,
-		transport: http.DefaultTransport,
-		tracer:    otel.Tracer("nexus.proxy"),
+		// balancer:  balancer,
+		transport:      http.DefaultTransport,
+		tracer:         otel.Tracer("nexus.proxy"),
+		serviceManager: serviceManager,
 	}
 }
 
@@ -65,7 +68,8 @@ func (p *Proxy) tracingMiddleware(next http.Handler) http.Handler {
 }
 
 func (p *Proxy) getBalancerStrategy() string {
-	switch p.balancer.(type) {
+	// switch p.balancer.(type) {
+	switch p.serviceManager.GetService("web").Balancer().(type) {
 	case *balancer.RoundRobinBalancer:
 		return "round_robin"
 	case *balancer.WeightedRoundRobinBalancer:
@@ -78,7 +82,7 @@ func (p *Proxy) getBalancerStrategy() string {
 }
 
 func (p *Proxy) getBackendCount() int {
-	switch b := p.balancer.(type) {
+	switch b := p.serviceManager.GetService("web").Balancer().(type) {
 	case *balancer.RoundRobinBalancer:
 		return len(b.GetServers())
 	case *balancer.WeightedRoundRobinBalancer:
@@ -105,7 +109,8 @@ func (p *Proxy) createClientTrace(span trace.Span) *httptrace.ClientTrace {
 // handleRequest handles the request
 func (p *Proxy) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// 选择后端服务器
-	target, err := p.balancer.Next(r.Context())
+	target, err := p.serviceManager.GetService("web").NextServer(r.Context())
+	// target, err := p.balancer.Next(r.Context())
 	if err != nil {
 		p.handleError(w, r, err)
 		return

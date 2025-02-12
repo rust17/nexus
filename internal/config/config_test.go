@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -806,4 +807,358 @@ telemetry:
 		}
 		wg.Wait()
 	})
+}
+
+// 路由配置测试
+func TestRouteConfig(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name        string
+		config      string
+		expectedErr string
+	}{
+		{
+			name: "valid_route_with_service",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "user_route"
+    match:
+      path: "/api/v1/users/**"
+    service: "user-service"
+`,
+			expectedErr: "",
+		},
+		{
+			name: "valid_route_with_split",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "canary_route"
+    match:
+      path: "/api/*/checkout"
+    split:
+      - service: "checkout-v1"
+        weight: 70
+      - service: "checkout-v2"
+        weight: 30
+`,
+			expectedErr: "",
+		},
+		{
+			name: "invalid_route_missing_name",
+			config: `
+listen_addr: ":8080"
+routes:
+  - match:
+      path: "/api/v1/users/**"
+    service: "user-service"
+`,
+			expectedErr: "route name cannot be empty",
+		},
+		{
+			name: "invalid_route_missing_match",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "user_route"
+    service: "user-service"
+`,
+			expectedErr: "match condition cannot be empty",
+		},
+		{
+			name: "invalid_route_missing_service_and_split",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "user_route"
+    match:
+      path: "/api/v1/users/**"
+`,
+			expectedErr: "must specify either service or split",
+		},
+		{
+			name: "invalid_route_split_weights",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "canary_route"
+    match:
+      path: "/api/*/checkout"
+    split:
+      - service: "checkout-v1"
+        weight: 60
+      - service: "checkout-v2"
+        weight: 30
+`,
+			expectedErr: "split weights must sum to 100",
+		},
+		{
+			name: "invalid_route_empty_split_service",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "canary_route"
+    match:
+      path: "/api/*/checkout"
+    split:
+      - service: ""
+        weight: 50
+      - service: "checkout-v2"
+        weight: 50
+`,
+			expectedErr: "split service cannot be empty",
+		},
+		{
+			name: "invalid_route_negative_split_weight",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "canary_route"
+    match:
+      path: "/api/*/checkout"
+    split:
+      - service: "checkout-v1"
+        weight: -10
+      - service: "checkout-v2"
+        weight: 110
+`,
+			expectedErr: "split weight must be positive",
+		},
+		{
+			name: "valid_route_with_header_match",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "header_route"
+    match:
+      headers:
+        X-Service-Group: "v2"
+    service: "user-service"
+`,
+			expectedErr: "",
+		},
+		{
+			name: "valid_route_with_method_match",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "method_route"
+    match:
+      method: "GET"
+    service: "user-service"
+`,
+			expectedErr: "",
+		},
+		{
+			name: "valid_route_with_host_match",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "host_route"
+    match:
+      host: "example.com"
+    service: "user-service"
+`,
+			expectedErr: "",
+		},
+		{
+			name: "valid_route_with_multiple_match_conditions",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "complex_route"
+    match:
+      path: "/api/v1/users/**"
+      method: "POST"
+      host: "api.example.com"
+      headers:
+        X-Service-Group: "v2"
+    service: "user-service"
+`,
+			expectedErr: "",
+		},
+		{
+			name: "invalid_route_with_zero_split_weight",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "canary_route"
+    match:
+      path: "/api/*/checkout"
+    split:
+      - service: "checkout-v1"
+        weight: 0
+      - service: "checkout-v2"
+        weight: 100
+`,
+			expectedErr: "split weight must be positive",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := NewConfig()
+			tmpFile := createTempConfigFile(t, tc.config)
+			require.NoError(t, cfg.LoadFromFile(tmpFile))
+
+			routeCfgs := cfg.GetRouteConfig()
+			for _, cfg := range routeCfgs {
+				err := validateRoute(cfg)
+				if tc.expectedErr == "" {
+					if err != nil {
+						t.Fatalf("Unexpected error: %v", err)
+					}
+				} else {
+					if err == nil || !strings.Contains(err.Error(), tc.expectedErr) {
+						t.Errorf("Expected error containing %q, got %v", tc.expectedErr, err)
+					}
+				}
+			}
+		})
+	}
+
+	// 测试路由配置的并发更新
+	t.Run("concurrent_update", func(t *testing.T) {
+		cfg := NewConfig()
+		initialRoutes := []*RouteConfig{
+			{
+				Name: "user_route",
+				Match: RouteMatch{
+					Path: "/api/v1/users/**",
+				},
+				Service: "user-service",
+			},
+		}
+
+		// 初始化配置
+		err := cfg.UpdateRoutes(initialRoutes)
+		require.NoError(t, err)
+
+		var wg sync.WaitGroup
+		updateCount := 100
+
+		// 并发更新路由配置
+		for i := 0; i < updateCount; i++ {
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				newRoutes := []*RouteConfig{
+					{
+						Name: fmt.Sprintf("route_%d", index),
+						Match: RouteMatch{
+							Path: fmt.Sprintf("/api/v%d/**", index),
+						},
+						Service: fmt.Sprintf("service_%d", index),
+					},
+				}
+				_ = cfg.UpdateRoutes(newRoutes)
+			}(i)
+		}
+
+		wg.Wait()
+
+		// 验证最终结果
+		finalRoutes := cfg.Routes
+		if len(finalRoutes) != 1 {
+			t.Errorf("Expected 1 route after concurrent updates, got %d", len(finalRoutes))
+		}
+
+		// 检查路由名称是否符合预期格式
+		if !strings.HasPrefix(finalRoutes[0].Name, "route_") {
+			t.Errorf("Unexpected route name format: %s", finalRoutes[0].Name)
+		}
+	})
+}
+
+// 测试 JSON 配置解析
+func TestUnmarshalJSON(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name        string
+		config      string
+		expectedErr string
+	}{
+		{
+			name: "valid_json_config",
+			config: `{
+				"listen_addr": ":8080",
+				"routes": [
+					{
+						"name": "user_route",
+						"match": {
+							"path": "/api/v1/users/**"
+						},
+						"service": "user-service"
+					}
+				]
+			}`,
+			expectedErr: "",
+		},
+		{
+			name: "invalid_json_format",
+			config: `{
+				"listen_addr": ":8080",
+				"routes": [
+					{
+						"name": "user_route",
+						"match": {
+							"path": "/api/v1/users/**"
+						},
+						"service": "user-service"
+					},
+				]
+			}`,
+			expectedErr: "invalid character",
+		},
+		{
+			name: "missing_required_field",
+			config: `{
+				"listen_addr": ":8080",
+				"services": [
+					{
+						"name": "",
+						"balancer_type": "round_robin",
+						"servers": [
+							{
+								"address": "http://localhost:8081"
+							}
+						]
+					}
+				]
+			}`,
+			expectedErr: "service name is required",
+		},
+		{
+			name: "invalid_route_config",
+			config: `{
+				"listen_addr": ":8080",
+				"services": [
+					{
+						"name": "user-service"
+					},
+					{
+						"name": "user-service"
+					}
+				]
+			}`,
+			expectedErr: "duplicate service name",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := NewConfig()
+			err := json.Unmarshal([]byte(tc.config), cfg)
+
+			if tc.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.expectedErr)
+			}
+		})
+	}
 }

@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -20,16 +21,16 @@ type Config struct {
 	// Server configuration
 	ListenAddr string `yaml:"listen_addr" json:"listen_addr"`
 
-	// Load balancer configuration
-	BalancerType string            `yaml:"balancer_type" json:"balancer_type"`
-	Servers      []ServerConfig    `yaml:"servers" json:"servers"`
-	HealthCheck  HealthCheckConfig `yaml:"health_check" json:"health_check"`
-
 	// Log configuration
 	LogLevel string `yaml:"log_level" json:"log_level"`
 
 	// Telemetry configuration
 	Telemetry TelemetryConfig `yaml:"telemetry" json:"telemetry"`
+
+	// 服务列表
+	Services map[string]*ServiceConfig `yaml:"services" json:"services"`
+
+	HealthCheck HealthCheckConfig `yaml:"health_check" json:"health_check"`
 }
 
 // ServerConfig represents a server with its weight
@@ -131,19 +132,29 @@ func (c *Config) GetListenAddr() string {
 }
 
 // GetBalancerType gets the load balancer type
-func (c *Config) GetBalancerType() string {
+func (c *Config) GetBalancerType(serviceName string) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	return c.BalancerType
+	sConfig, ok := c.Services[serviceName]
+	if !ok {
+		return ""
+	}
+
+	return sConfig.BalancerType
 }
 
 // GetServers gets the server list
-func (c *Config) GetServers() []ServerConfig {
+func (c *Config) GetServers(serviceName string) []ServerConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	return c.Servers
+	sConfig, ok := c.Services[serviceName]
+	if !ok {
+		return nil
+	}
+
+	return sConfig.Servers
 }
 
 // GetHealthCheckConfig gets the health check configuration
@@ -230,4 +241,76 @@ func (cw *ConfigWatcher) checkForUpdate() {
 			watcher(cfg)
 		}
 	}
+}
+
+// 中间结构用于解析列表
+type rawConfig struct {
+	ListenAddr  string            `yaml:"listen_addr" json:"listen_addr"`
+	LogLevel    string            `yaml:"log_level" json:"log_level"`
+	Telemetry   TelemetryConfig   `yaml:"telemetry" json:"telemetry"`
+	Services    []*ServiceConfig  `yaml:"services" json:"services"` // 临时用 slice 解析
+	HealthCheck HealthCheckConfig `yaml:"health_check" json:"health_check"`
+}
+
+// 服务配置结构需要添加 Name 字段
+type ServiceConfig struct {
+	Name         string         `yaml:"name" json:"name"`
+	BalancerType string         `yaml:"balancer_type" json:"balancer_type"`
+	Servers      []ServerConfig `yaml:"servers" json:"servers"`
+}
+
+// UnmarshalYAML 实现列表到 map 的转换
+func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var raw rawConfig
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+
+	// 转换列表到 map
+	services := make(map[string]*ServiceConfig)
+	for _, svc := range raw.Services {
+		if svc.Name == "" {
+			return fmt.Errorf("service name is required")
+		}
+		if _, exists := services[svc.Name]; exists {
+			return fmt.Errorf("duplicate service name: %s", svc.Name)
+		}
+		services[svc.Name] = svc
+	}
+
+	c.ListenAddr = raw.ListenAddr
+	c.LogLevel = raw.LogLevel
+	c.Telemetry = raw.Telemetry
+	c.Services = services
+	c.HealthCheck = raw.HealthCheck
+
+	return nil
+}
+
+// UnmarshalJSON 实现列表到 map 的转换
+func (c *Config) UnmarshalJSON(data []byte) error {
+	var raw rawConfig
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// 转换列表到 map
+	services := make(map[string]*ServiceConfig)
+	for _, svc := range raw.Services {
+		if svc.Name == "" {
+			return fmt.Errorf("service name is required")
+		}
+		if _, exists := services[svc.Name]; exists {
+			return fmt.Errorf("duplicate service name: %s", svc.Name)
+		}
+		services[svc.Name] = svc
+	}
+
+	c.ListenAddr = raw.ListenAddr
+	c.LogLevel = raw.LogLevel
+	c.Telemetry = raw.Telemetry
+	c.Services = services
+	c.HealthCheck = raw.HealthCheck
+
+	return nil
 }

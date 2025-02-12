@@ -18,14 +18,21 @@ func Validate(filePath string) error {
 	if err := validateListenAddr(c.ListenAddr); err != nil {
 		return err
 	}
-	if err := validateBalancerType(c.BalancerType); err != nil {
-		return err
-	}
 	if err := validateLogLevel(c.LogLevel); err != nil {
 		return err
 	}
-	if err := validateServers(c.Servers, c.BalancerType); err != nil {
-		return err
+
+	// 校验每个服务
+	for _, svc := range c.Services {
+		if svc.Name == "" {
+			return errors.New("service name cannot be empty")
+		}
+		if err := validateBalancerType(svc.BalancerType); err != nil {
+			return fmt.Errorf("service %s: %w", svc.Name, err)
+		}
+		if err := validateServers(svc.Servers, svc.BalancerType); err != nil {
+			return fmt.Errorf("service %s: %w", svc.Name, err)
+		}
 	}
 
 	return validateHealthCheck(c.HealthCheck.Interval, c.HealthCheck.Timeout)

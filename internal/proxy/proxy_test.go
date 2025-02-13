@@ -2,17 +2,12 @@ package proxy
 
 import (
 	"bytes"
-	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
 
-	"nexus/internal/balancer"
-	lb "nexus/internal/balancer"
-	"nexus/internal/config"
 	"nexus/internal/service"
 
 	"go.opentelemetry.io/otel"
@@ -26,44 +21,6 @@ import (
 const (
 	testResponseBody = "Hello from backend"
 )
-
-type MockRouter struct {
-	routes   []*config.RouteConfig
-	services map[string]service.Service
-}
-
-func (m *MockRouter) Match(req *http.Request) service.Service {
-	return m.services["mock"]
-}
-
-type MockService struct {
-	backend *httptest.Server
-}
-
-func (m *MockService) Balancer() balancer.Balancer {
-	balancer := lb.NewBalancer("round_robin")
-	if m.backend != nil {
-		balancer.Add(m.backend.URL)
-	}
-	return balancer
-}
-
-func (m *MockService) NextServer(ctx context.Context) (string, error) {
-	if m.backend != nil {
-		return m.backend.URL, nil
-	}
-	return "", errors.New("no backend available")
-}
-
-func (m *MockService) Close() {
-	if m.backend != nil {
-		m.backend.Close()
-	}
-}
-
-func (m *MockService) Name() string {
-	return "mock_service"
-}
 
 func TestProxy_RequestFlow(t *testing.T) {
 	tests := []struct {

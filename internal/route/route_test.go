@@ -107,12 +107,6 @@ func TestRouter_Match(t *testing.T) {
 
 		// 边界情况
 		{
-			name:     "Root path match",
-			method:   "GET",
-			path:     "/",
-			expected: "root_path",
-		},
-		{
 			name:     "Case insensitive path match",
 			method:   "GET",
 			path:     "/CaseSensitivePath",

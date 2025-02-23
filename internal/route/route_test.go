@@ -226,3 +226,140 @@ func TestRouter_Match(t *testing.T) {
 		})
 	}
 }
+
+func TestRouter_Update(t *testing.T) {
+	// 初始配置
+	initialRoutes := []*config.RouteConfig{
+		{
+			Name:    "initial_route",
+			Service: "service_a",
+			Match: config.RouteMatch{
+				Method: "GET",
+				Path:   "/initial",
+			},
+		},
+	}
+
+	initialServices := map[string]*config.ServiceConfig{
+		"service_a": {Name: "service_a", BalancerType: "round_robin"},
+	}
+
+	rt := NewRouter(initialRoutes, initialServices)
+
+	// 测试更新后的配置
+	updatedRoutes := []*config.RouteConfig{
+		{
+			Name:    "new_route",
+			Service: "service_b",
+			Match: config.RouteMatch{
+				Method: "POST",
+				Path:   "/updated",
+			},
+		},
+		{
+			Name:    "updated_route",
+			Service: "service_a",
+			Match: config.RouteMatch{
+				Method: "PUT",
+				Path:   "/existing",
+			},
+		},
+	}
+
+	updatedServices := map[string]*config.ServiceConfig{
+		"service_a": {Name: "service_a", BalancerType: "least_conn"}, // 更新现有服务配置
+		"service_b": {Name: "service_b", BalancerType: "random"},     // 新增服务
+	}
+
+	// 执行更新操作
+	if err := rt.Update(updatedRoutes, updatedServices); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	// 验证服务更新
+	t.Run("Service updates", func(t *testing.T) {
+		// 转换为具体类型以访问私有字段
+		r := rt.(*router)
+
+		// 检查保留的服务是否更新
+		if svc, ok := r.services["service_a"]; !ok {
+			t.Error("Existing service should be preserved")
+		} else if svc.Name() != "service_a" {
+			t.Errorf("Expected service_a, got %s", svc.Name())
+		}
+
+		// 检查新增服务
+		if _, ok := r.services["service_b"]; !ok {
+			t.Error("New service should be added")
+		}
+
+		// 检查服务数量
+		if len(r.services) != 2 {
+			t.Errorf("Expected 2 services, got %d", len(r.services))
+		}
+	})
+
+	// 验证路由更新
+	t.Run("Route updates", func(t *testing.T) {
+		testCases := []struct {
+			method   string
+			path     string
+			expected string
+		}{
+			{"POST", "/updated", "service_b"}, // 新路由
+			{"PUT", "/existing", "service_a"}, // 更新后的路由
+			{"GET", "/initial", ""},           // 旧路由应该被移除
+		}
+
+		for _, tc := range testCases {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			svc := rt.Match(req)
+
+			if tc.expected == "" {
+				if svc != nil {
+					t.Errorf("Expected no match for %s %s, got %s", tc.method, tc.path, svc.Name())
+				}
+				continue
+			}
+
+			if svc == nil || svc.Name() != tc.expected {
+				t.Errorf("For %s %s: expected %s, got %v",
+					tc.method, tc.path, tc.expected, svc)
+			}
+		}
+	})
+
+	// 测试部分更新
+	t.Run("Partial update", func(t *testing.T) {
+		partialRoutes := []*config.RouteConfig{
+			{
+				Name:    "partial_route",
+				Service: "service_c",
+				Match: config.RouteMatch{
+					Method: "PATCH",
+					Path:   "/partial",
+				},
+			},
+		}
+
+		partialServices := map[string]*config.ServiceConfig{
+			"service_c": {Name: "service_c", BalancerType: "round_robin"},
+		}
+
+		if err := rt.Update(partialRoutes, partialServices); err != nil {
+			t.Fatalf("Partial update failed: %v", err)
+		}
+
+		// 转换为具体类型以访问私有字段
+		r := rt.(*router)
+		if len(r.services) != 1 {
+			t.Errorf("Expected 1 service after partial update, got %d", len(r.services))
+		}
+
+		// 验证新路由是否生效
+		req := httptest.NewRequest("PATCH", "/partial", nil)
+		if svc := rt.Match(req); svc == nil || svc.Name() != "service_c" {
+			t.Errorf("Partial update failed to apply new route")
+		}
+	})
+}

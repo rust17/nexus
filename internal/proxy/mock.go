@@ -19,6 +19,10 @@ func (m *MockRouter) Match(req *http.Request) service.Service {
 	return m.services["mock"]
 }
 
+func (m *MockRouter) Update(routes []*config.RouteConfig, services map[string]*config.ServiceConfig) error {
+	return nil
+}
+
 type MockService struct {
 	backend *httptest.Server
 }
@@ -46,4 +50,8 @@ func (m *MockService) Close() {
 
 func (m *MockService) Name() string {
 	return "mock_service"
+}
+
+func (m *MockService) Update(config *config.ServiceConfig) error {
+	return nil
 }

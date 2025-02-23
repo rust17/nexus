@@ -80,3 +80,7 @@ func (b *RoundRobinBalancer) UpdateServers(servers []config.ServerConfig) {
 func (b *RoundRobinBalancer) GetServers() []string {
 	return b.servers
 }
+
+func (b *RoundRobinBalancer) Type() string {
+	return "round_robin"
+}

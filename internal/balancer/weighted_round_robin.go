@@ -121,3 +121,7 @@ func (b *WeightedRoundRobinBalancer) GetDefaultWeight(weight int) int {
 
 	return weight
 }
+
+func (b *WeightedRoundRobinBalancer) Type() string {
+	return "weighted_round_robin"
+}

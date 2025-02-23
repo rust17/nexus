@@ -5,14 +5,14 @@ listen_addr: ":8080"
 services:
   - name: "api-service"
     # Load balancer type (round_robin, least_connections, weighted_round_robin)
-  - balancer_type: "weighted_round_robin"
-  - servers:
-    - address: "http://localhost:8081"
-      weight: 3
-    - address: "http://localhost:8082"
-      weight: 2
-    - address: "http://localhost:8083"
-      weight: 1
+    balancer_type: "weighted_round_robin"
+    servers:
+      - address: "http://localhost:8081"
+        weight: 3
+      - address: "http://localhost:8082"
+        weight: 2
+      - address: "http://localhost:8083"
+        weight: 1
 
 # Health check configuration
 health_check:
@@ -25,7 +25,7 @@ log_level: "info"
 # Telemetry configuration
 telemetry:
   opentelemetry:
-    enabled: true
+    enabled: false
     endpoint: "otel-collector:4317"
     service_name: "nexus-lb"
     metrics:
@@ -38,7 +38,7 @@ routes:
       path: "/api/v1/users/**"  # 路径通配符
       headers:                 # Header匹配
         X-Service-Group: "v2"
-    service: user-service      # 关联后端服务
+    service: api-service      # 关联后端服务
 
   - name: canary_route
     match:

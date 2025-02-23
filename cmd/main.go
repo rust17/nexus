@@ -9,11 +9,11 @@ import (
 	"syscall"
 	"time"
 
-	lb "nexus/internal/balancer"
 	"nexus/internal/config"
 	"nexus/internal/healthcheck"
 	lg "nexus/internal/logger"
 	px "nexus/internal/proxy"
+	"nexus/internal/route"
 	"nexus/internal/telemetry"
 
 	"go.opentelemetry.io/otel"
@@ -39,29 +39,20 @@ func main() {
 		logger.SetLevel(logger.ToLogLevel(cfg.GetLogLevel()))
 	}
 
-	// Initialize load balancer
-	balancer := lb.NewBalancer(cfg.GetBalancerType())
-	for _, server := range cfg.GetServers() {
-		if cfg.GetBalancerType() == "weighted_round_robin" {
-			if wrr, ok := balancer.(*lb.WeightedRoundRobinBalancer); ok {
-				wrr.AddWithWeight(server.Address, server.Weight)
-			}
-		} else {
-			balancer.Add(server.Address)
-		}
-	}
-
 	// Initialize health checker
 	healthCheckCfg := cfg.GetHealthCheckConfig()
 	healthChecker := healthcheck.NewHealthChecker(healthCheckCfg.Interval, healthCheckCfg.Timeout)
-	for _, server := range cfg.GetServers() {
-		healthChecker.AddServer(server.Address)
+	for _, server := range cfg.Services {
+		for _, s := range server.Servers {
+			healthChecker.AddServer(s.Address)
+		}
 	}
 	go healthChecker.Start()
 	defer healthChecker.Stop()
 
 	// Initialize reverse proxy
-	proxy := px.NewProxy(balancer)
+	router := route.NewRouter(cfg.Routes, cfg.Services)
+	proxy := px.NewProxy(router)
 	proxy.SetErrorHandler(func(w http.ResponseWriter, r *http.Request, err error) {
 		logger.Error("Proxy error: %v", err)
 		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
@@ -85,8 +76,8 @@ func main() {
 	configWatcher.Watch(func(newCfg *config.Config) {
 		logger.Info("Configuration changed, applying updates...")
 
-		// Update load balancer
-		balancer.UpdateServers(newCfg.GetServers())
+		// Update routes
+		router.Update(newCfg.Routes, newCfg.Services)
 
 		// Update health check
 		healthChecker.UpdateInterval(newCfg.GetHealthCheckConfig().Interval)

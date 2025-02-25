@@ -1,33 +1,50 @@
 package test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
-	lb "nexus/internal/balancer"
 	"nexus/internal/config"
 	"nexus/internal/healthcheck"
 	px "nexus/internal/proxy"
+	"nexus/internal/route"
+	"nexus/internal/service"
 )
 
-func TestIntegration(t *testing.T) {
-	// Create test backend servers
+// setupTestBackends creates test backend servers
+func setupTestBackends() (string, string, func()) {
+	// Create first backend server
 	backend1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Response from backend 1"))
 	}))
-	defer backend1.Close()
 
+	// Create second backend server
 	backend2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Response from backend 2"))
 	}))
-	defer backend2.Close()
 
-	// Define test cases for different load balancing algorithms
+	// Return cleanup function
+	cleanup := func() {
+		backend1.Close()
+		backend2.Close()
+	}
+
+	return backend1.URL, backend2.URL, cleanup
+}
+
+func TestIntegration(t *testing.T) {
+	// Create test backend servers
+	backend1URL, backend2URL, cleanup := setupTestBackends()
+	defer cleanup()
+
+	// Define test cases
 	testCases := []struct {
 		name          string
 		balancerType  string
@@ -38,8 +55,8 @@ func TestIntegration(t *testing.T) {
 			name:         "Round Robin",
 			balancerType: "round_robin",
 			servers: []config.ServerConfig{
-				{Address: backend1.URL, Weight: 1},
-				{Address: backend2.URL, Weight: 1},
+				{Address: backend1URL, Weight: 1},
+				{Address: backend2URL, Weight: 1},
 			},
 			expectedOrder: []string{
 				"Response from backend 1",
@@ -52,8 +69,8 @@ func TestIntegration(t *testing.T) {
 			name:         "Weighted Round Robin",
 			balancerType: "weighted_round_robin",
 			servers: []config.ServerConfig{
-				{Address: backend1.URL, Weight: 2},
-				{Address: backend2.URL, Weight: 1},
+				{Address: backend1URL, Weight: 2},
+				{Address: backend2URL, Weight: 1},
 			},
 			expectedOrder: []string{
 				"Response from backend 1",
@@ -68,8 +85,8 @@ func TestIntegration(t *testing.T) {
 			name:         "Least Connections",
 			balancerType: "least_connections",
 			servers: []config.ServerConfig{
-				{Address: backend1.URL, Weight: 1},
-				{Address: backend2.URL, Weight: 1},
+				{Address: backend1URL, Weight: 1},
+				{Address: backend2URL, Weight: 1},
 			},
 			expectedOrder: []string{
 				"Response from backend 1",
@@ -81,41 +98,54 @@ func TestIntegration(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc // Prevent closure issues
+		tc := tc // Avoid closure issues
 		t.Run(tc.name, func(t *testing.T) {
-			// Create configuration
+			// Create config
 			cfg := config.NewConfig()
-			cfg.BalancerType = tc.balancerType
-			cfg.Servers = tc.servers
+
+			// Health check configuration
 			cfg.HealthCheck.Interval = 100 * time.Millisecond
 			cfg.HealthCheck.Timeout = 1 * time.Second
 
-			// Initialize load balancer
-			balancer := lb.NewBalancer(tc.balancerType)
-			for _, server := range cfg.GetServers() {
-				if cfg.GetBalancerType() == "weighted_round_robin" {
-					if wrr, ok := balancer.(*lb.WeightedRoundRobinBalancer); ok {
-						wrr.AddWithWeight(server.Address, server.Weight)
-					}
-				} else {
-					balancer.Add(server.Address)
-				}
-			}
-
 			// Initialize health checker
-			healthChecker := healthcheck.NewHealthChecker(cfg.GetHealthCheckConfig().Interval, cfg.GetHealthCheckConfig().Timeout)
-			for _, server := range cfg.GetServers() {
+			healthChecker := healthcheck.NewHealthChecker(
+				cfg.GetHealthCheckConfig().Interval,
+				cfg.GetHealthCheckConfig().Timeout,
+			)
+
+			for _, server := range tc.servers {
 				healthChecker.AddServer(server.Address)
 			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
 			go healthChecker.Start()
 			defer healthChecker.Stop()
 
+			// Initialize router
+			router := route.NewRouter([]*config.RouteConfig{
+				{
+					Name:    "test-route",
+					Service: "test-service",
+					Match: config.RouteMatch{
+						Path: "/",
+					},
+				},
+			}, map[string]*config.ServiceConfig{
+				"test-service": {
+					Name:         "test-service",
+					BalancerType: tc.balancerType,
+					Servers:      tc.servers,
+				},
+			})
+
 			// Initialize reverse proxy
-			proxy := px.NewProxy(balancer)
+			proxy := px.NewProxy(router)
 
 			// Test request routing
-			req := httptest.NewRequest("GET", "/", nil)
 			for i, expected := range tc.expectedOrder {
+				req := httptest.NewRequest("GET", "/", nil).WithContext(ctx)
 				w := httptest.NewRecorder()
 				proxy.ServeHTTP(w, req)
 
@@ -129,56 +159,49 @@ func TestIntegration(t *testing.T) {
 }
 
 func TestConfigHotReloadIntegration(t *testing.T) {
-	// create a temp config file
-	configContent := `
+	// Create temporary config file
+	initialConfig := `
 listen_addr: ":8080"
-balancer_type: "round_robin"
-servers:
-  - address: "http://localhost:8081"
-    weight: 1
+services:
+  - name: "test-service"
+    balancer_type: "round_robin"
+    servers:
+      - address: "http://localhost:8081"
+        weight: 1
 health_check:
   interval: 10s
   timeout: 2s
 log_level: "info"
 `
-	configFile := config.CreateTempConfigFile(t, configContent)
+	configFile := config.CreateTempConfigFile(t, initialConfig)
 	defer os.Remove(configFile)
 
-	// init config watcher
+	// Initialize config watcher
 	watcher := config.NewConfigWatcher(configFile)
 
-	go watcher.Start()
+	var wg sync.WaitGroup
+	wg.Add(1)
 
-	// update config file
-	newConfigContent := `
-listen_addr: ":8081"
-balancer_type: "weighted_round_robin"
-servers:
-  - address: "http://localhost:8082"
-    weight: 2
-health_check:
-  interval: 5s
-  timeout: 1s
-log_level: "debug"
-`
-	time.Sleep(2 * time.Second)
-	if err := os.WriteFile(configFile, []byte(newConfigContent), 0644); err != nil {
-		t.Fatalf("Failed to update config file: %v", err)
-	}
-
-	var updated bool
+	// Set config update callback
 	watcher.Watch(func(cfg *config.Config) {
-		updated = true
-		// verify updated config
+		defer wg.Done()
+
+		// Verify updated config
 		if cfg.GetListenAddr() != ":8081" {
-			t.Errorf("Expected listen_addr :8081, got %s", cfg.GetListenAddr())
+			t.Errorf("Expected listen address :8081, got %s", cfg.GetListenAddr())
 		}
-		if cfg.GetBalancerType() != "weighted_round_robin" {
-			t.Errorf("Expected balancer_type weighted_round_robin, got %s", cfg.GetBalancerType())
+
+		// Get specific service config
+		testService := cfg.Services["test-service"]
+
+		if testService.BalancerType != "weighted_round_robin" {
+			t.Errorf("Expected balancer type weighted_round_robin, got %s", testService.BalancerType)
 		}
-		if len(cfg.GetServers()) != 1 || cfg.GetServers()[0].Address != "http://localhost:8082" {
-			t.Errorf("Unexpected servers list: %v", cfg.GetServers())
+
+		if len(testService.Servers) != 1 || testService.Servers[0].Address != "http://localhost:8082" {
+			t.Errorf("Server list doesn't match expected: %v", testService.Servers)
 		}
+
 		if cfg.GetHealthCheckConfig().Interval != 5*time.Second {
 			t.Errorf("Expected health check interval 5s, got %v", cfg.GetHealthCheckConfig().Interval)
 		}
@@ -190,9 +213,104 @@ log_level: "debug"
 		}
 	})
 
-	// wait for update
-	time.Sleep(2 * time.Second)
-	if !updated {
-		t.Error("Config update not detected")
+	// Start watcher
+	go watcher.Start()
+
+	// Update config file
+	updatedConfig := `
+listen_addr: ":8081"
+services:
+  - name: "test-service"
+    balancer_type: "weighted_round_robin"
+    servers:
+      - address: "http://localhost:8082"
+        weight: 2
+health_check:
+  interval: 5s
+  timeout: 1s
+log_level: "debug"
+`
+	// Write new config
+	if err := os.WriteFile(configFile, []byte(updatedConfig), 0644); err != nil {
+		t.Fatalf("Failed to update config file: %v", err)
+	}
+
+	// Wait for watcher initialization
+	time.Sleep(500 * time.Millisecond)
+
+	// Use channel and timeout mechanism to wait for config update
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Config successfully updated
+	case <-time.After(3 * time.Second):
+		t.Fatal("Config update timeout, no update event detected")
+	}
+}
+
+// TestServiceIntegration tests service integration functionality
+func TestServiceIntegration(t *testing.T) {
+	// Create test backend servers
+	backend1URL, backend2URL, cleanup := setupTestBackends()
+	defer cleanup()
+
+	// Create service config
+	svcConfig := &config.ServiceConfig{
+		Name:         "api-service",
+		BalancerType: "round_robin",
+		Servers: []config.ServerConfig{
+			{Address: backend1URL, Weight: 1},
+			{Address: backend2URL, Weight: 1},
+		},
+	}
+
+	// Create service instance
+	svc := service.NewService(svcConfig)
+
+	// Verify service name
+	if svc.Name() != "api-service" {
+		t.Errorf("Expected service name api-service, got %s", svc.Name())
+	}
+
+	// Test load balancing
+	ctx := context.Background()
+
+	// Verify server rotation
+	server1, err := svc.NextServer(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get next server: %v", err)
+	}
+
+	server2, err := svc.NextServer(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get next server: %v", err)
+	}
+
+	if server1 == server2 {
+		t.Error("Round Robin load balancing should return different servers")
+	}
+
+	// Test service update
+	updatedConfig := &config.ServiceConfig{
+		Name:         "api-service-updated",
+		BalancerType: "weighted_round_robin",
+		Servers: []config.ServerConfig{
+			{Address: backend1URL, Weight: 2},
+			{Address: backend2URL, Weight: 1},
+		},
+	}
+
+	if err := svc.Update(updatedConfig); err != nil {
+		t.Fatalf("Failed to update service config: %v", err)
+	}
+
+	// Verify updated config
+	if svc.Name() != "api-service-updated" {
+		t.Errorf("Updated service name should be api-service-updated, got %s", svc.Name())
 	}
 }

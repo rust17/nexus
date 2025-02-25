@@ -167,14 +167,14 @@ func (cw *ConfigWatcher) checkForUpdate() {
 	}
 }
 
-// UnmarshalYAML 需要处理路由配置
+// UnmarshalYAML Custom UnmarshalYAML
 func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var raw rawConfig
 	if err := unmarshal(&raw); err != nil {
 		return err
 	}
 
-	// 转换服务列表到 map
+	// Convert service list to map
 	services := make(map[string]*ServiceConfig)
 	for _, svc := range raw.Services {
 		if svc.Name == "" {
@@ -196,14 +196,14 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-// UnmarshalJSON 需要处理路由配置
+// UnmarshalJSON Custom UnmarshalJSON
 func (c *Config) UnmarshalJSON(data []byte) error {
 	var raw rawConfig
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
 
-	// 转换服务列表到 map
+	// Convert service list to map
 	services := make(map[string]*ServiceConfig)
 	for _, svc := range raw.Services {
 		if svc.Name == "" {

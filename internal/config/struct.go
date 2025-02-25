@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// 路由配置结构
+// Route config structure
 type RouteConfig struct {
 	Name    string        `yaml:"name" json:"name"`
 	Match   RouteMatch    `yaml:"match" json:"match"`
@@ -13,7 +13,7 @@ type RouteConfig struct {
 	Split   []*RouteSplit `yaml:"split" json:"split"`
 }
 
-// 路由匹配条件
+// Route match condition
 type RouteMatch struct {
 	Path    string            `yaml:"path" json:"path"`
 	Headers map[string]string `yaml:"headers" json:"headers"`
@@ -21,13 +21,13 @@ type RouteMatch struct {
 	Host    string            `yaml:"host" json:"host"`
 }
 
-// 流量分割配置
+// Traffic split configuration
 type RouteSplit struct {
 	Service string `yaml:"service" json:"service"`
 	Weight  int    `yaml:"weight" json:"weight"`
 }
 
-// 中间临时结构
+// Intermediate temporary structure
 type rawConfig struct {
 	ListenAddr  string            `yaml:"listen_addr" json:"listen_addr"`
 	LogLevel    string            `yaml:"log_level" json:"log_level"`
@@ -37,7 +37,7 @@ type rawConfig struct {
 	HealthCheck HealthCheckConfig `yaml:"health_check" json:"health_check"`
 }
 
-// 服务配置结构
+// Service config structure
 type ServiceConfig struct {
 	Name         string         `yaml:"name" json:"name"`
 	BalancerType string         `yaml:"balancer_type" json:"balancer_type"`
@@ -57,10 +57,10 @@ type Config struct {
 	// Telemetry configuration
 	Telemetry TelemetryConfig `yaml:"telemetry" json:"telemetry"`
 
-	// 服务列表
+	// Service list
 	Services map[string]*ServiceConfig `yaml:"services" json:"services"`
 
-	// 路由配置
+	// Route config
 	Routes []*RouteConfig `yaml:"routes" json:"routes"`
 
 	HealthCheck HealthCheckConfig `yaml:"health_check" json:"health_check"`

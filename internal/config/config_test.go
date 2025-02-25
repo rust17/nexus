@@ -109,7 +109,7 @@ func TestInvalidConfigFormat(t *testing.T) {
 }
 
 func TestConfigHotReload(t *testing.T) {
-	// 创建临时配置文件
+	// Create temporary config file
 	configContent := `
 listen_addr: ":8080"
 services:
@@ -126,18 +126,18 @@ log_level: "info"
 	configFile := createTempConfigFile(t, configContent)
 	defer os.Remove(configFile)
 
-	// 初始化配置监控器
+	// Initialize config watcher
 	watcher := NewConfigWatcher(configFile)
 
-	// 使用原子操作
+	// Use atomic operation
 	var updated int32
 	watcher.Watch(func(cfg *Config) {
-		atomic.StoreInt32(&updated, 1) // 使用原子存储
+		atomic.StoreInt32(&updated, 1) // Use atomic store
 	})
 
 	go watcher.Start()
 
-	// 修改配置文件
+	// Modify config file
 	newConfigContent := `
 listen_addr: ":8081"
 services:
@@ -157,7 +157,7 @@ log_level: "debug"
 		t.Fatalf("Failed to update config file: %v", err)
 	}
 
-	// 等待更新
+	// Wait for update
 	time.Sleep(1 * time.Second)
 	if atomic.LoadInt32(&updated) == 0 {
 		t.Error("Config update not detected")
@@ -335,19 +335,19 @@ func TestUpdateListenAddr(t *testing.T) {
 
 	cfg := NewConfig()
 
-	// 初始值测试
+	// Initial value test
 	if cfg.GetListenAddr() != "" {
 		t.Errorf("Expected empty listen address, got %s", cfg.GetListenAddr())
 	}
 
-	// 正常更新测试
+	// Valid config test
 	expectedAddr := ":8081"
 	cfg.UpdateListenAddr(expectedAddr)
 	if actual := cfg.GetListenAddr(); actual != expectedAddr {
 		t.Errorf("Expected %s, got %s", expectedAddr, actual)
 	}
 
-	// 并发更新测试
+	// Concurrent update test
 	var wg sync.WaitGroup
 	total := 100
 	for i := 0; i < total; i++ {
@@ -360,7 +360,7 @@ func TestUpdateListenAddr(t *testing.T) {
 	}
 	wg.Wait()
 
-	// 验证最终结果
+	// Verify final result
 	var updateCount int
 	for i := 0; i < total; i++ {
 		if cfg.GetListenAddr() == fmt.Sprintf(":%d", 8080+i) {
@@ -379,12 +379,12 @@ func TestUpdateBalancerType(t *testing.T) {
 	cfg.Services = make(map[string]*ServiceConfig)
 	cfg.Services["web-service"] = &ServiceConfig{} // 初始化服务配置
 
-	// 初始值测试
+	// Initial value test
 	if cfg.GetBalancerType("web-service") != "" {
 		t.Errorf("Expected empty balancer type, got %s", cfg.GetBalancerType("web-service"))
 	}
 
-	// 正常更新测试
+	// Valid config test
 	t.Run("ValidTypes", func(t *testing.T) {
 		testCases := []struct {
 			input    string
@@ -407,7 +407,7 @@ func TestUpdateBalancerType(t *testing.T) {
 		}
 	})
 
-	// 无效类型测试
+	// Invalid type test
 	t.Run("InvalidType", func(t *testing.T) {
 		err := cfg.UpdateBalancerType("web-service", "invalid_type")
 		if err == nil {
@@ -419,16 +419,16 @@ func TestUpdateBalancerType(t *testing.T) {
 		}
 	})
 
-	// 并发更新测试
+	// Concurrent update test
 	t.Run("ConcurrentUpdates", func(t *testing.T) {
 		var wg sync.WaitGroup
 		types := []string{"round_robin", "weighted_round_robin", "least_connections"}
 		total := 100
 
-		// 重置配置确保测试独立性
+		// Reset config to ensure test independence
 		cfg = NewConfig()
 		cfg.Services = make(map[string]*ServiceConfig)
-		cfg.Services["web-service"] = &ServiceConfig{} // 初始化服务配置
+		cfg.Services["web-service"] = &ServiceConfig{} // Initialize service config
 
 		for i := 0; i < total; i++ {
 			wg.Add(1)
@@ -441,7 +441,7 @@ func TestUpdateBalancerType(t *testing.T) {
 
 		wg.Wait()
 
-		// 验证最终结果
+		// Verify final result
 		var updateCount int
 		for i := 0; i < total; i++ {
 			if cfg.GetBalancerType("web-service") == types[i%3] {
@@ -461,14 +461,14 @@ func TestUpdateServers(t *testing.T) {
 	cfg.Services = make(map[string]*ServiceConfig)
 	cfg.Services["web-service"] = &ServiceConfig{
 		BalancerType: "round_robin",
-	} // 初始化服务配置
+	} // Initialize service config
 
-	// 初始值测试
+	// Initial value test
 	if len(cfg.GetServers("web-service")) != 0 {
 		t.Errorf("Expected empty servers, got %v", cfg.GetServers("web-service"))
 	}
 
-	// 正常更新测试
+	// Valid config test
 	t.Run("ValidServers", func(t *testing.T) {
 		validServers := []ServerConfig{
 			{Address: "http://server1", Weight: 1},
@@ -484,7 +484,7 @@ func TestUpdateServers(t *testing.T) {
 		}
 	})
 
-	// 异常情况测试
+	// Invalid config test
 	t.Run("InvalidCases", func(t *testing.T) {
 		testCases := []struct {
 			name        string
@@ -527,7 +527,7 @@ func TestUpdateServers(t *testing.T) {
 		}
 	})
 
-	// 并发更新测试
+	// Concurrent update test
 	t.Run("ConcurrentUpdates", func(t *testing.T) {
 		var wg sync.WaitGroup
 		testServers := [][]ServerConfig{
@@ -547,7 +547,7 @@ func TestUpdateServers(t *testing.T) {
 		}
 		wg.Wait()
 
-		// 验证最终一致性
+		// Verify final consistency
 		finalServers := cfg.GetServers("web-service")
 		valid := false
 		for _, s := range testServers {
@@ -567,13 +567,13 @@ func TestUpdateHealthCheck(t *testing.T) {
 
 	cfg := NewConfig()
 
-	// 初始值测试
+	// Initial value test
 	initialHC := cfg.GetHealthCheckConfig()
 	if initialHC.Interval != 0 || initialHC.Timeout != 0 {
 		t.Errorf("Expected empty health check config, got %+v", initialHC)
 	}
 
-	// 正常更新测试
+	// Valid config test
 	t.Run("ValidConfig", func(t *testing.T) {
 		testCases := []struct {
 			interval time.Duration
@@ -598,7 +598,7 @@ func TestUpdateHealthCheck(t *testing.T) {
 		}
 	})
 
-	// 异常情况测试
+	// Invalid config test
 	t.Run("InvalidConfig", func(t *testing.T) {
 		testCases := []struct {
 			name     string
@@ -621,7 +621,7 @@ func TestUpdateHealthCheck(t *testing.T) {
 		}
 	})
 
-	// 并发更新测试
+	// Concurrent update test
 	t.Run("ConcurrentUpdates", func(t *testing.T) {
 		var wg sync.WaitGroup
 		testCases := []struct {
@@ -644,7 +644,7 @@ func TestUpdateHealthCheck(t *testing.T) {
 		}
 		wg.Wait()
 
-		// 验证最终一致性
+		// Verify final consistency
 		finalHC := cfg.GetHealthCheckConfig()
 		valid := false
 		for _, tc := range testCases {
@@ -664,12 +664,12 @@ func TestUpdateLogLevel(t *testing.T) {
 
 	cfg := NewConfig()
 
-	// 初始值测试
+	// Initial value test
 	if cfg.GetLogLevel() != "" {
 		t.Errorf("Expected empty log level, got %s", cfg.GetLogLevel())
 	}
 
-	// 正常更新测试
+	// Valid config test
 	t.Run("ValidLevels", func(t *testing.T) {
 		testCases := []struct {
 			input    string
@@ -695,7 +695,7 @@ func TestUpdateLogLevel(t *testing.T) {
 		}
 	})
 
-	// 无效级别测试
+	// Invalid level test
 	t.Run("InvalidLevel", func(t *testing.T) {
 		err := cfg.UpdateLogLevel("invalid")
 		if err == nil {
@@ -707,13 +707,13 @@ func TestUpdateLogLevel(t *testing.T) {
 		}
 	})
 
-	// 并发更新测试
+	// Concurrent update test
 	t.Run("ConcurrentUpdates", func(t *testing.T) {
 		var wg sync.WaitGroup
 		levels := []string{"debug", "info", "warn", "error", "fatal"}
 		total := 100
 
-		// 重置配置确保测试独立性
+		// Reset config to ensure test independence
 		cfg = NewConfig()
 
 		for i := 0; i < total; i++ {
@@ -727,7 +727,7 @@ func TestUpdateLogLevel(t *testing.T) {
 
 		wg.Wait()
 
-		// 验证最终结果合法性
+		// Verify final result validity
 		finalLevel := cfg.GetLogLevel()
 		if finalLevel != "" {
 			valid := false
@@ -744,9 +744,9 @@ func TestUpdateLogLevel(t *testing.T) {
 	})
 }
 
-// 新增OpenTelemetry配置相关测试
+// OpenTelemetry config related tests
 func TestTelemetryConfig(t *testing.T) {
-	// 测试用例
+	// Test cases
 	testCases := []struct {
 		name     string
 		config   string
@@ -790,7 +790,7 @@ telemetry:
 		})
 	}
 
-	// 测试并发读取
+	// Test concurrent access
 	t.Run("concurrent_access", func(t *testing.T) {
 		cfg := NewConfig()
 		tmpFile := createTempConfigFile(t, testCases[0].config)
@@ -809,7 +809,7 @@ telemetry:
 	})
 }
 
-// 路由配置测试
+// Route config test
 func TestRouteConfig(t *testing.T) {
 	t.Parallel()
 
@@ -1019,7 +1019,7 @@ routes:
 		})
 	}
 
-	// 测试路由配置的并发更新
+	// Test concurrent update of route config
 	t.Run("concurrent_update", func(t *testing.T) {
 		cfg := NewConfig()
 		initialRoutes := []*RouteConfig{
@@ -1032,14 +1032,14 @@ routes:
 			},
 		}
 
-		// 初始化配置
+		// Initialize config
 		err := cfg.UpdateRoutes(initialRoutes)
 		require.NoError(t, err)
 
 		var wg sync.WaitGroup
 		updateCount := 100
 
-		// 并发更新路由配置
+		// Concurrent update of route config
 		for i := 0; i < updateCount; i++ {
 			wg.Add(1)
 			go func(index int) {
@@ -1059,20 +1059,20 @@ routes:
 
 		wg.Wait()
 
-		// 验证最终结果
+		// Verify final result
 		finalRoutes := cfg.Routes
 		if len(finalRoutes) != 1 {
 			t.Errorf("Expected 1 route after concurrent updates, got %d", len(finalRoutes))
 		}
 
-		// 检查路由名称是否符合预期格式
+		// Check route name format
 		if !strings.HasPrefix(finalRoutes[0].Name, "route_") {
 			t.Errorf("Unexpected route name format: %s", finalRoutes[0].Name)
 		}
 	})
 }
 
-// 测试 JSON 配置解析
+// Test JSON config parsing
 func TestUnmarshalJSON(t *testing.T) {
 	t.Parallel()
 

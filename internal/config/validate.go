@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Validate 校验配置文件
+// Validate Validate config file
 func Validate(filePath string) error {
 	c := NewConfig()
 
@@ -14,7 +14,7 @@ func Validate(filePath string) error {
 		return err
 	}
 
-	// 使用校验函数替换原有逻辑
+	// Use validation functions instead of original logic
 	if err := validateListenAddr(c.ListenAddr); err != nil {
 		return err
 	}
@@ -22,7 +22,7 @@ func Validate(filePath string) error {
 		return err
 	}
 
-	// 校验每个服务
+	// Validate each service
 	for _, svc := range c.Services {
 		if svc.Name == "" {
 			return errors.New("service name cannot be empty")
@@ -35,7 +35,7 @@ func Validate(filePath string) error {
 		}
 	}
 
-	// 校验路由配置
+	// Validate route config
 	for _, route := range c.Routes {
 		if err := validateRoute(route); err != nil {
 			return fmt.Errorf("route %s: %w", route.Name, err)
@@ -45,7 +45,7 @@ func Validate(filePath string) error {
 	return validateHealthCheck(c.HealthCheck.Interval, c.HealthCheck.Timeout)
 }
 
-// validateListenAddr 校验监听地址
+// validateListenAddr Validate listen address
 func validateListenAddr(addr string) error {
 	if addr == "" {
 		return errors.New("listen address cannot be empty")
@@ -54,7 +54,7 @@ func validateListenAddr(addr string) error {
 	return nil
 }
 
-// validateBalancerType 校验负载均衡类型
+// validateBalancerType Validate balancer type
 func validateBalancerType(bType string) error {
 	validTypes := map[string]bool{
 		"round_robin":          true,
@@ -68,7 +68,7 @@ func validateBalancerType(bType string) error {
 	return nil
 }
 
-// validateLogLevel 校验日志级别
+// validateLogLevel Validate log level
 func validateLogLevel(level string) error {
 	validLevels := map[string]bool{
 		"debug": true,
@@ -85,7 +85,7 @@ func validateLogLevel(level string) error {
 	return nil
 }
 
-// validateServers 校验服务器列表
+// validateServers Validate server list
 func validateServers(servers []ServerConfig, balancerType string) error {
 	if len(servers) == 0 {
 		return errors.New("server list cannot be empty")
@@ -103,7 +103,7 @@ func validateServers(servers []ServerConfig, balancerType string) error {
 	return nil
 }
 
-// validateHealthCheck 校验健康检查配置
+// validateHealthCheck Validate health check config
 func validateHealthCheck(interval, timeout time.Duration) error {
 	if interval <= 0 {
 		return errors.New("health check interval must be positive")
@@ -118,7 +118,7 @@ func validateHealthCheck(interval, timeout time.Duration) error {
 	return nil
 }
 
-// validateRoute 校验路由配置
+// validateRoute Validate route config
 func validateRoute(route *RouteConfig) error {
 	if route.Name == "" {
 		return errors.New("route name cannot be empty")

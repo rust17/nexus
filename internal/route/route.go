@@ -8,20 +8,20 @@ import (
 	"nexus/internal/service"
 )
 
-// Router 负责根据请求匹配对应的服务
+// Router is responsible for matching requests to the corresponding service
 type Router interface {
 	Match(*http.Request) service.Service
 	Update(routes []*config.RouteConfig, services map[string]*config.ServiceConfig) error
 }
 
-// 添加读写锁保证并发安全
+// Add read-write lock to ensure concurrent safety
 type router struct {
 	mu       sync.RWMutex
 	services map[string]service.Service
 	tree     *node
 }
 
-// NewRouter 创建一个新的路由器实例
+// NewRouter Create a new router instance
 func NewRouter(routes []*config.RouteConfig, services map[string]*config.ServiceConfig) Router {
 	serviceMap := make(map[string]service.Service)
 	for name, conf := range services {
@@ -36,7 +36,7 @@ func NewRouter(routes []*config.RouteConfig, services map[string]*config.Service
 	return r
 }
 
-// Match 方法需要加读锁
+// Match Method requires read lock
 func (r *router) Match(req *http.Request) service.Service {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -48,37 +48,37 @@ func (r *router) Match(req *http.Request) service.Service {
 	return r.services[routeInfo.service]
 }
 
-// Update 实现配置热更新
+// Update Implement configuration hot update
 func (r *router) Update(routes []*config.RouteConfig, services map[string]*config.ServiceConfig) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// 增量更新现有服务
+	// Incremental update existing services
 	for name, conf := range services {
 		if existing, ok := r.services[name]; ok {
-			// 复用已有实例更新配置
+			// Reuse existing instance to update configuration
 			if err := existing.Update(conf); err != nil {
 				return err
 			}
 		} else {
-			// 新增服务
+			// Add new service
 			r.services[name] = service.NewService(conf)
 		}
 	}
 
-	// 清理已删除的服务
+	// Clean up deleted services
 	for name := range r.services {
 		if _, ok := services[name]; !ok {
 			delete(r.services, name)
 		}
 	}
 
-	// 更新路由树
+	// Update route tree
 	r.tree = buildTree(routes)
 	return nil
 }
 
-// buildTree 构建基数树
+// buildTree Build radix tree
 func buildTree(routes []*config.RouteConfig) *node {
 	tree := newNode()
 

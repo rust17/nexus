@@ -30,7 +30,7 @@ func newNode() *node {
 	}
 }
 
-// insert 插入路径到基数树
+// insert Insert path to radix tree
 func (n *node) insert(pattern string, route *routeInfo) {
 	pattern = strings.TrimRight(pattern, "/")
 	if pattern == "" {
@@ -72,7 +72,7 @@ func (n *node) insert(pattern string, route *routeInfo) {
 	}
 }
 
-// search 在基数树中搜索匹配的路由信息
+// search Search matching route information in radix tree
 func (n *node) search(req *http.Request) *routeInfo {
 	path := strings.TrimRight(req.URL.Path, "/")
 	if path == "" {
@@ -109,9 +109,9 @@ func (n *node) searchParts(parts []string, height int, req *http.Request) *route
 	return nil
 }
 
-// findMatchingRoute 查找匹配的路由信息
+// findMatchingRoute Find matching route information
 func (n *node) findMatchingRoute(req *http.Request) *routeInfo {
-	// 如果只有一个路由信息，无需匹配直接返回
+	// If there is only one route information, return directly
 	if len(n.routeInfos) == 1 {
 		return n.routeInfos[0]
 	}
@@ -125,19 +125,19 @@ func (n *node) findMatchingRoute(req *http.Request) *routeInfo {
 	return nil
 }
 
-// matchRouteInfo 检查请求是否匹配路由信息
+// matchRouteInfo Check if the request matches the route information
 func matchRouteInfo(info *routeInfo, req *http.Request) bool {
-	// 检查 HTTP 方法匹配
+	// Check HTTP method matching
 	if info.method != "" && info.method != req.Method {
 		return false
 	}
 
-	// 检查 Host 匹配
+	// Check Host matching
 	if info.host != "" && !matchHost(info.host, req.Host) {
 		return false
 	}
 
-	// 检查 Header 匹配
+	// Check Header matching
 	if len(info.headers) > 0 {
 		for header, expectedValue := range info.headers {
 			actualValue := req.Header.Get(header)
@@ -150,20 +150,20 @@ func matchRouteInfo(info *routeInfo, req *http.Request) bool {
 	return true
 }
 
-// matchHost 检查请求 Host 是否匹配路由配置
+// matchHost Check if the request Host matches the route configuration
 func matchHost(pattern, host string) bool {
-	// 处理精确匹配
+	// Handle exact matching
 	if pattern == host {
 		return true
 	}
 
-	// 处理子域名匹配
+	// Handle subdomain matching
 	if strings.HasPrefix(pattern, "*") {
 		suffix := pattern[1:]
 		return strings.HasSuffix(host, suffix)
 	}
 
-	// 处理正则表达式匹配
+	// Handle regular expression matching
 	if strings.HasPrefix(pattern, "^") || strings.HasSuffix(pattern, "$") {
 		matched, err := regexp.MatchString(pattern, host)
 		if err == nil && matched {

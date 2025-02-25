@@ -177,19 +177,19 @@ func TestProxy_ErrorHandler(t *testing.T) {
 }
 
 func TestTracingMiddleware(t *testing.T) {
-	// 初始化测试导出器
+	// Initialize test exporter
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithSyncer(exporter),
 	)
-	// 设置全局TracerProvider
+	// Set global TracerProvider
 	otel.SetTextMapPropagator(
 		propagation.NewCompositeTextMapPropagator(
 			propagation.TraceContext{},
 			propagation.Baggage{},
 		))
 
-	// 创建测试服务
+	// Create test service
 	mockSvc := &MockService{
 		backend: httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(testResponseBody))
@@ -204,24 +204,24 @@ func TestTracingMiddleware(t *testing.T) {
 	})
 	p.tracer = tp.Tracer("test")
 
-	// 创建测试请求
+	// Create test request
 	req := httptest.NewRequest("GET", "/", nil)
 	rec := httptest.NewRecorder()
 
-	// 执行中间件
+	// Execute middleware
 	p.tracingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 验证追踪头存在
+		// Verify trace header exists
 		if r.Header.Get("traceparent") == "" {
 			t.Error("Missing traceparent header")
 		}
-		// 验证追踪上下文
+		// Verify trace context
 		ctx := r.Context()
 		if span := trace.SpanFromContext(ctx); !span.IsRecording() {
 			t.Error("Missing active span in context")
 		}
 	})).ServeHTTP(rec, req)
 
-	// 验证生成的Span
+	// Verify generated span
 	spans := exporter.GetSpans()
 	if len(spans) != 1 {
 		t.Fatalf("Expected 1 span, got %d", len(spans))

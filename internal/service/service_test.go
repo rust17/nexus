@@ -11,7 +11,7 @@ import (
 )
 
 func TestService(t *testing.T) {
-	// 测试配置
+	// Test configuration
 	cfg := &config.ServiceConfig{
 		Name:         "test-service",
 		BalancerType: "round_robin",
@@ -30,7 +30,7 @@ func TestService(t *testing.T) {
 		s := NewService(cfg)
 		ctx := context.Background()
 
-		// 测试轮询逻辑
+		// Test polling logic
 		addr1, _ := s.NextServer(ctx)
 		addr2, _ := s.NextServer(ctx)
 		assert.NotEqual(t, addr1, addr2)

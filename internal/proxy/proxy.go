@@ -40,14 +40,14 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.tracingMiddleware(handler).ServeHTTP(w, r)
 }
 
-// 新增追踪中间件
+// Add tracing middleware
 func (p *Proxy) tracingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
 		service := p.router.Match(r)
 
-		// 创建包含负载均衡信息的span
+		// Create span with load balancer information
 		ctx, span := p.tracer.Start(ctx, "Proxy.Request",
 			trace.WithAttributes(
 				attribute.String("lb.strategy", p.getBalancerStrategy(service.Balancer())),
@@ -55,11 +55,11 @@ func (p *Proxy) tracingMiddleware(next http.Handler) http.Handler {
 			))
 		defer span.End()
 
-		// 将追踪上下文注入请求
+		// Inject tracing context into request
 		propagator := otel.GetTextMapPropagator()
 		propagator.Inject(ctx, propagation.HeaderCarrier(r.Header))
 
-		// 创建追踪客户端
+		// Create tracing client
 		traceCtx := httptrace.WithClientTrace(ctx, p.createClientTrace(span))
 		r = r.WithContext(traceCtx)
 
@@ -107,7 +107,7 @@ func (p *Proxy) createClientTrace(span trace.Span) *httptrace.ClientTrace {
 
 // handleRequest handles the request
 func (p *Proxy) handleRequest(w http.ResponseWriter, r *http.Request) {
-	// 选择后端服务器
+	// Select backend server
 	service := p.router.Match(r)
 	target, err := service.NextServer(r.Context())
 
@@ -116,14 +116,14 @@ func (p *Proxy) handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 解析目标 URL
+	// Parse target URL
 	targetURL, err := url.Parse(target)
 	if err != nil {
 		p.handleError(w, r, err)
 		return
 	}
 
-	// 转发请求
+	// Forward request
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
 	proxy.Transport = otelhttp.NewTransport(http.DefaultTransport)
 

@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-// Service 服务接口
+// Service service interface
 type Service interface {
 	Name() string
 	NextServer(ctx context.Context) (string, error)
@@ -15,7 +15,7 @@ type Service interface {
 	Update(config *config.ServiceConfig) error
 }
 
-// 基础服务实现
+// Basic service implementation
 type serviceImpl struct {
 	mu       sync.RWMutex
 	name     string

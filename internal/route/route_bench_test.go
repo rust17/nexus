@@ -8,7 +8,7 @@ import (
 )
 
 func BenchmarkRouter_Match(b *testing.B) {
-	// 定义测试用例
+	// Define test cases
 	tests := []struct {
 		name   string
 		method string
@@ -142,7 +142,7 @@ func BenchmarkRouter_Match(b *testing.B) {
 	}
 	router := NewRouter(routes, services)
 
-	// 运行基准测试
+	// Run benchmark test
 	for _, tc := range tests {
 		b.Run(tc.name, func(b *testing.B) {
 			req := httptest.NewRequest(tc.method, tc.path, nil)

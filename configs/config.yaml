@@ -1,7 +1,7 @@
 # Proxy server listening address
 listen_addr: ":8080"
 
-# 服务配置
+# Service configuration
 services:
   - name: "api-service"
     # Load balancer type (round_robin, least_connections, weighted_round_robin)
@@ -31,19 +31,19 @@ telemetry:
     metrics:
       interval: "60s"
 
-# 路由配置
+# Route configuration
 routes:
   - name: user_route
     match:
-      path: "/api/v1/users/**"  # 路径通配符
-      headers:                 # Header匹配
+      path: "/api/v1/users/**"  # Path wildcard
+      headers:                 # Header matching
         X-Service-Group: "v2"
-    service: api-service      # 关联后端服务
+    service: api-service      # Associated backend service
 
   - name: canary_route
     match:
       path: "/api/*/checkout"
-    split:                     # 流量分割
+    split:                     # Traffic split
       - service: checkout-v1
         weight: 70
       - service: checkout-v2

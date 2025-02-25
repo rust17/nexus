@@ -104,7 +104,7 @@ func (h *HealthChecker) checkAllServers() {
 			ctx, cancel := context.WithTimeout(context.Background(), h.timeout)
 			defer cancel()
 
-			// 创建追踪span
+			// Create tracing span
 			ctx, span := otel.Tracer("nexus.healthcheck").Start(ctx, "HealthCheck",
 				trace.WithAttributes(
 					attribute.String("service.address", s.address),
@@ -115,7 +115,7 @@ func (h *HealthChecker) checkAllServers() {
 			err := h.httpCheck(ctx, s.address)
 			duration := time.Since(startTime)
 
-			// 记录检查结果
+			// Record check result
 			span.SetAttributes(
 				attribute.Bool("check.healthy", err == nil),
 				attribute.Int64("check.duration_ms", duration.Milliseconds()),
@@ -124,7 +124,7 @@ func (h *HealthChecker) checkAllServers() {
 			if err != nil {
 				span.RecordError(err)
 				span.SetStatus(codes.Error, err.Error())
-				lg.GetInstance().Error("[%s] 健康检查失败 - 耗时: %v 错误: %v",
+				lg.GetInstance().Error("[%s] Health check failed - Duration: %v Error: %v",
 					s.address, duration.Round(time.Millisecond), err)
 			}
 
@@ -147,7 +147,7 @@ func (h *HealthChecker) httpCheck(ctx context.Context, address string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("非正常状态码: %d", resp.StatusCode)
+		return fmt.Errorf("non-normal status code: %d", resp.StatusCode)
 	}
 	return nil
 }

@@ -26,20 +26,19 @@ func (t *Telemetry) RegisterMetrics() error {
 		return err
 	}
 
-	// 在代理处理中记录指标
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
-		// 请求计数器
+		// Request counter
 		requestCounter.Add(r.Context(), 1)
 
-		// 延迟直方图
+		// Delay histogram
 		defer func() {
 			latency := time.Since(start).Milliseconds()
 			latencyHistogram.Record(r.Context(), latency)
 		}()
 
-		// ...处理请求...
+		// ...process request...
 	})
 
 	return nil

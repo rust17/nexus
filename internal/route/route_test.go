@@ -16,7 +16,7 @@ func TestRouter_Match(t *testing.T) {
 		host     string
 		expected string
 	}{
-		// 基础路径匹配
+		// Basic path matching
 		{
 			name:     "Exact path match",
 			method:   "GET",
@@ -36,7 +36,7 @@ func TestRouter_Match(t *testing.T) {
 			expected: "regex_path",
 		},
 
-		// 方法匹配
+		// Method matching
 		{
 			name:     "GET method match",
 			method:   "GET",
@@ -50,7 +50,7 @@ func TestRouter_Match(t *testing.T) {
 			expected: "post_method",
 		},
 
-		// Host匹配
+		// Host matching
 		{
 			name:     "Exact host match",
 			method:   "GET",
@@ -66,7 +66,7 @@ func TestRouter_Match(t *testing.T) {
 			expected: "subdomain_host",
 		},
 
-		// Header匹配
+		// Header matching
 		{
 			name:     "Content-Type header match",
 			method:   "POST",
@@ -82,7 +82,7 @@ func TestRouter_Match(t *testing.T) {
 			expected: "auth_header",
 		},
 
-		// 组合匹配
+		// Combination matching
 		{
 			name:     "Path and method match",
 			method:   "PUT",
@@ -105,7 +105,7 @@ func TestRouter_Match(t *testing.T) {
 			expected: "full_match",
 		},
 
-		// 边界情况
+		// Edge cases
 		{
 			name:     "Case insensitive path match",
 			method:   "GET",
@@ -113,7 +113,7 @@ func TestRouter_Match(t *testing.T) {
 			expected: "case_insensitive",
 		},
 
-		// 特殊字符
+		// Special characters
 		{
 			name:     "Unicode path match",
 			method:   "GET",
@@ -121,7 +121,7 @@ func TestRouter_Match(t *testing.T) {
 			expected: "unicode_path",
 		},
 
-		// 冲突路由
+		// Conflict routes
 		{
 			name:     "Conflict route 1 - basic path",
 			method:   "GET",
@@ -135,7 +135,7 @@ func TestRouter_Match(t *testing.T) {
 			expected: "conflict_2",
 		},
 
-		// 正则表达式
+		// Regular expression
 		{
 			name:     "UUID path match",
 			method:   "GET",
@@ -149,7 +149,7 @@ func TestRouter_Match(t *testing.T) {
 			expected: "version_path",
 		},
 
-		// 权重路由
+		// Weighted route
 		{
 			name:     "Weighted route A",
 			method:   "GET",
@@ -165,7 +165,7 @@ func TestRouter_Match(t *testing.T) {
 			expected: "weighted_b",
 		},
 
-		// 版本控制
+		// Version control
 		{
 			name:     "Version header match",
 			method:   "GET",
@@ -228,7 +228,7 @@ func TestRouter_Match(t *testing.T) {
 }
 
 func TestRouter_Update(t *testing.T) {
-	// 初始配置
+	// Initial configuration
 	initialRoutes := []*config.RouteConfig{
 		{
 			Name:    "initial_route",
@@ -246,7 +246,7 @@ func TestRouter_Update(t *testing.T) {
 
 	rt := NewRouter(initialRoutes, initialServices)
 
-	// 测试更新后的配置
+	// Test updated configuration
 	updatedRoutes := []*config.RouteConfig{
 		{
 			Name:    "new_route",
@@ -267,48 +267,48 @@ func TestRouter_Update(t *testing.T) {
 	}
 
 	updatedServices := map[string]*config.ServiceConfig{
-		"service_a": {Name: "service_a", BalancerType: "least_conn"}, // 更新现有服务配置
-		"service_b": {Name: "service_b", BalancerType: "random"},     // 新增服务
+		"service_a": {Name: "service_a", BalancerType: "least_conn"}, // Update existing service configuration
+		"service_b": {Name: "service_b", BalancerType: "random"},     // Add new service
 	}
 
-	// 执行更新操作
+	// Execute update operation
 	if err := rt.Update(updatedRoutes, updatedServices); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
-	// 验证服务更新
+	// Verify service updates
 	t.Run("Service updates", func(t *testing.T) {
-		// 转换为具体类型以访问私有字段
+		// Convert to specific type to access private fields
 		r := rt.(*router)
 
-		// 检查保留的服务是否更新
+		// Check if the preserved service is updated
 		if svc, ok := r.services["service_a"]; !ok {
 			t.Error("Existing service should be preserved")
 		} else if svc.Name() != "service_a" {
 			t.Errorf("Expected service_a, got %s", svc.Name())
 		}
 
-		// 检查新增服务
+		// Check if the new service is added
 		if _, ok := r.services["service_b"]; !ok {
 			t.Error("New service should be added")
 		}
 
-		// 检查服务数量
+		// Check service count
 		if len(r.services) != 2 {
 			t.Errorf("Expected 2 services, got %d", len(r.services))
 		}
 	})
 
-	// 验证路由更新
+	// Verify route updates
 	t.Run("Route updates", func(t *testing.T) {
 		testCases := []struct {
 			method   string
 			path     string
 			expected string
 		}{
-			{"POST", "/updated", "service_b"}, // 新路由
-			{"PUT", "/existing", "service_a"}, // 更新后的路由
-			{"GET", "/initial", ""},           // 旧路由应该被移除
+			{"POST", "/updated", "service_b"}, // New route
+			{"PUT", "/existing", "service_a"}, // Updated route
+			{"GET", "/initial", ""},           // Old route should be removed
 		}
 
 		for _, tc := range testCases {
@@ -329,7 +329,7 @@ func TestRouter_Update(t *testing.T) {
 		}
 	})
 
-	// 测试部分更新
+	// Test partial update
 	t.Run("Partial update", func(t *testing.T) {
 		partialRoutes := []*config.RouteConfig{
 			{
@@ -350,13 +350,13 @@ func TestRouter_Update(t *testing.T) {
 			t.Fatalf("Partial update failed: %v", err)
 		}
 
-		// 转换为具体类型以访问私有字段
+		// Convert to specific type to access private fields
 		r := rt.(*router)
 		if len(r.services) != 1 {
 			t.Errorf("Expected 1 service after partial update, got %d", len(r.services))
 		}
 
-		// 验证新路由是否生效
+		// Verify if the new route is applied
 		req := httptest.NewRequest("PATCH", "/partial", nil)
 		if svc := rt.Match(req); svc == nil || svc.Name() != "service_c" {
 			t.Errorf("Partial update failed to apply new route")

@@ -65,7 +65,7 @@ func main() {
 	}
 	defer tel.Shutdown(context.Background())
 
-	// 配置追踪传播器
+	// Configure trace propagator
 	otel.SetTextMapPropagator(
 		propagation.NewCompositeTextMapPropagator(
 			propagation.TraceContext{},

@@ -103,9 +103,9 @@ func TestHealthChecker_RemoveServer(t *testing.T) {
 
 	// Remove server
 	checker.RemoveServer(ts.URL)
-	time.Sleep(100 * time.Millisecond) // 等待可能进行中的健康检查完成
+	time.Sleep(100 * time.Millisecond) // Wait for possible ongoing health check to complete
 
-	// 检查服务器是否已移除且不可访问
+	// Check if server has been removed and is not accessible
 	checker.mu.RLock()
 	defer checker.mu.RUnlock()
 	if _, exists := checker.servers[ts.URL]; exists {
@@ -165,34 +165,34 @@ func TestHealthCheckTracing(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt // Prevent closure issues
 		t.Run(tt.name, func(t *testing.T) {
-			// 创建span导出器
+			// Create span exporter
 			exporter := tracetest.NewInMemoryExporter()
 			tp := trace.NewTracerProvider(
 				trace.WithSyncer(exporter),
 			)
 
-			// 替换全局的TracerProvider
+			// Replace the global TracerProvider
 			oldTP := otel.GetTracerProvider()
 			defer otel.SetTracerProvider(oldTP)
 			otel.SetTracerProvider(tp)
 
-			// 创建测试服务器
+			// Create test server
 			ts := httptest.NewServer(tt.handler)
 			defer ts.Close()
 
-			// 更新测试用例中的地址属性
+			// Update the address attribute in the test case
 			tt.wantAttributes[attribute.Key("service.address")] = attribute.StringValue(ts.URL)
 
-			// 创建健康检查器
+			// Create health checker
 			checker := NewHealthChecker(10*time.Millisecond, 1*time.Second)
 			checker.AddServer(ts.URL)
 			go checker.Start()
 			defer checker.Stop()
 
-			// 等待健康检查完成
+			// Wait for health check to complete
 			time.Sleep(50 * time.Millisecond)
 
-			// 验证追踪数据
+			// Verify tracing data
 			spans := exporter.GetSpans()
 			if len(spans) == 0 {
 				t.Fatal("No spans recorded")

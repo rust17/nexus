@@ -16,7 +16,7 @@ import (
 )
 
 func TestNewTelemetry_Disabled(t *testing.T) {
-	// 测试禁用状态下的初始化
+	// Test initialization in disabled state
 	cfg := config.OpenTelemetryConfig{Enabled: false}
 	tel, err := telemetry.NewTelemetry(context.Background(), cfg)
 
@@ -24,13 +24,13 @@ func TestNewTelemetry_Disabled(t *testing.T) {
 	assert.IsType(t, &sdktrace.TracerProvider{}, tel.GetTracerProvider())
 	assert.IsType(t, &sdkmetric.MeterProvider{}, tel.GetMeterProvider())
 
-	// 验证全局provider未被修改
+	// Verify that the global provider was not modified
 	assert.NotSame(t, tel.GetTracerProvider(), otel.GetTracerProvider())
 	assert.NotSame(t, tel.GetMeterProvider(), otel.GetMeterProvider())
 }
 
 func TestNewTelemetry_Enabled(t *testing.T) {
-	// 测试启用状态下的初始化（需要有效的endpoint）
+	// Test initialization in enabled state (requires a valid endpoint)
 	cfg := config.OpenTelemetryConfig{
 		Enabled:     true,
 		ServiceName: "test-service",
@@ -43,17 +43,17 @@ func TestNewTelemetry_Enabled(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, tel.GetMeter())
 
-	// 验证全局provider设置
+	// Verify that the global provider is set
 	assert.Same(t, tel.GetTracerProvider(), otel.GetTracerProvider())
 	assert.Same(t, tel.GetMeterProvider(), otel.GetMeterProvider())
 }
 
 func TestNewTelemetry_InvalidConfig(t *testing.T) {
-	// 测试无效配置的情况
+	// Test invalid configuration
 	t.Run("invalid resource", func(t *testing.T) {
 		cfg := config.OpenTelemetryConfig{
 			Enabled:     true,
-			ServiceName: "", // 无效的服务名
+			ServiceName: "", // Invalid service name
 		}
 		_, err := telemetry.NewTelemetry(context.Background(), cfg)
 		assert.ErrorContains(t, err, "service name is required")
@@ -78,18 +78,18 @@ func TestShutdown(t *testing.T) {
 	})
 
 	t.Run("shutdown with errors", func(t *testing.T) {
-		// 创建已关闭的provider来触发错误
+		// Create a closed provider to trigger an error
 		cfg := config.OpenTelemetryConfig{Enabled: false}
 		tel, _ := telemetry.NewTelemetry(context.Background(), cfg)
-		tel.Shutdown(context.Background()) // 第一次正常关闭
+		tel.Shutdown(context.Background()) // First normal shutdown
 
-		err := tel.Shutdown(context.Background()) // 第二次关闭应报错
+		err := tel.Shutdown(context.Background()) // Second shutdown should report an error
 		assert.ErrorContains(t, err, "telemetry shutdown errors")
 	})
 }
 
 func TestGlobalPropagators(t *testing.T) {
-	// 验证全局传播器设置
+	// Verify that the global propagators are set
 	cfg := config.OpenTelemetryConfig{Enabled: true}
 	telemetry.NewTelemetry(context.Background(), cfg)
 

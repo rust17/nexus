@@ -45,25 +45,25 @@ func NewTelemetry(ctx context.Context, cfg config.OpenTelemetryConfig) (*Telemet
 		return nil, fmt.Errorf("failed to create resource: %w", err)
 	}
 
-	// 初始化Trace导出器
+	// Initialize Trace exporter
 	traceExporter, err := newTraceExporter(ctx, cfg.Endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	// 初始化Metric导出器
+	// Initialize Metric exporter
 	metricExporter, err := newMetricExporter(ctx, cfg.Endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	// 创建Trace Provider
+	// Create Trace Provider
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(traceExporter),
 		sdktrace.WithResource(res),
 	)
 
-	// 创建Metric Provider
+	// Create Metric Provider
 	meterProvider := sdkmetric.NewMeterProvider(
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExporter,
 			sdkmetric.WithInterval(cfg.Metrics.Interval),
@@ -71,7 +71,7 @@ func NewTelemetry(ctx context.Context, cfg config.OpenTelemetryConfig) (*Telemet
 		sdkmetric.WithResource(res),
 	)
 
-	// 设置全局Provider
+	// Set global Provider
 	otel.SetTracerProvider(tracerProvider)
 	otel.SetMeterProvider(meterProvider)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
@@ -87,7 +87,7 @@ func NewTelemetry(ctx context.Context, cfg config.OpenTelemetryConfig) (*Telemet
 }
 
 func newTraceExporter(ctx context.Context, endpoint string) (sdktrace.SpanExporter, error) {
-	// 校验endpoint格式是否正确
+	// Validate endpoint format
 	if _, _, err := net.SplitHostPort(endpoint); err != nil {
 		return nil, fmt.Errorf("invalid endpoint format: %w", err)
 	}

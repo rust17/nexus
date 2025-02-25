@@ -35,7 +35,7 @@ func (c *Config) UpdateBalancerType(serviceName string, bType string) error {
 	return nil
 }
 
-// UpdateServers 更新后端服务器列表
+// UpdateServers Update backend server list
 func (c *Config) UpdateServers(serviceName string, servers []ServerConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -53,7 +53,7 @@ func (c *Config) UpdateServers(serviceName string, servers []ServerConfig) error
 	return nil
 }
 
-// UpdateHealthCheck 更新健康检查配置
+// UpdateHealthCheck Update health check config
 func (c *Config) UpdateHealthCheck(interval, timeout time.Duration) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -67,7 +67,7 @@ func (c *Config) UpdateHealthCheck(interval, timeout time.Duration) error {
 	return nil
 }
 
-// UpdateLogLevel 更新日志级别配置
+// UpdateLogLevel Update log level config
 func (c *Config) UpdateLogLevel(level string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -80,7 +80,7 @@ func (c *Config) UpdateLogLevel(level string) error {
 	return nil
 }
 
-// UpdateRoutes 更新路由配置
+// UpdateRoutes Update route config
 func (c *Config) UpdateRoutes(routes []*RouteConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

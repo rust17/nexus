@@ -7,7 +7,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// traceBackend 记录负载均衡选择事件
+// traceBackend records the load balancer selection event
 func traceBackend(ctx context.Context, address string, index int) {
 	span := trace.SpanFromContext(ctx)
 	if !span.IsRecording() {

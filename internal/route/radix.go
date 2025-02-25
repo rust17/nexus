@@ -1,0 +1,175 @@
+package route
+
+import (
+	"net/http"
+	"regexp"
+	"strings"
+)
+
+type node struct {
+	pattern    string
+	part       string
+	children   []*node
+	isWild     bool
+	isEnd      bool
+	routeInfos []*routeInfo
+}
+
+type routeInfo struct {
+	method  string
+	host    string
+	headers map[string]string
+	service string
+	path    string
+}
+
+func newNode() *node {
+	return &node{
+		children:   make([]*node, 0),
+		routeInfos: make([]*routeInfo, 0),
+	}
+}
+
+// insert 插入路径到基数树
+func (n *node) insert(pattern string, route *routeInfo) {
+	pattern = strings.TrimRight(pattern, "/")
+	if pattern == "" {
+		pattern = "/"
+	}
+	route.path = pattern
+
+	if pattern == "/" {
+		n.pattern = pattern
+		n.isEnd = true
+		n.routeInfos = append(n.routeInfos, route)
+		return
+	}
+
+	parts := strings.Split(strings.Trim(pattern, "/"), "/")
+	current := n
+	for i, part := range parts {
+		matched := false
+		for _, child := range current.children {
+			if child.part == part || child.isWild {
+				current = child
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			child := newNode()
+			child.part = part
+			child.isWild = len(part) > 0 && (part[0] == ':' || part[0] == '*')
+			current.children = append(current.children, child)
+			current = child
+		}
+
+		if i == len(parts)-1 {
+			current.pattern = pattern
+			current.isEnd = true
+			current.routeInfos = append(current.routeInfos, route)
+		}
+	}
+}
+
+// search 在基数树中搜索匹配的路由信息
+func (n *node) search(req *http.Request) *routeInfo {
+	path := strings.TrimRight(req.URL.Path, "/")
+	if path == "" {
+		path = "/"
+	}
+
+	if path == "/" {
+		if n.isEnd {
+			return n.findMatchingRoute(req)
+		}
+		return nil
+	}
+
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	return n.searchParts(parts, 0, req)
+}
+
+func (n *node) searchParts(parts []string, height int, req *http.Request) *routeInfo {
+	if len(parts) == height || strings.HasPrefix(n.part, "*") {
+		if n.isEnd {
+			return n.findMatchingRoute(req)
+		}
+		return nil
+	}
+
+	part := parts[height]
+	for _, child := range n.children {
+		if child.part == part || child.isWild {
+			if result := child.searchParts(parts, height+1, req); result != nil {
+				return result
+			}
+		}
+	}
+	return nil
+}
+
+// findMatchingRoute 查找匹配的路由信息
+func (n *node) findMatchingRoute(req *http.Request) *routeInfo {
+	// 如果只有一个路由信息，无需匹配直接返回
+	if len(n.routeInfos) == 1 {
+		return n.routeInfos[0]
+	}
+
+	for _, info := range n.routeInfos {
+		if matchRouteInfo(info, req) {
+			return info
+		}
+	}
+
+	return nil
+}
+
+// matchRouteInfo 检查请求是否匹配路由信息
+func matchRouteInfo(info *routeInfo, req *http.Request) bool {
+	// 检查 HTTP 方法匹配
+	if info.method != "" && info.method != req.Method {
+		return false
+	}
+
+	// 检查 Host 匹配
+	if info.host != "" && !matchHost(info.host, req.Host) {
+		return false
+	}
+
+	// 检查 Header 匹配
+	if len(info.headers) > 0 {
+		for header, expectedValue := range info.headers {
+			actualValue := req.Header.Get(header)
+			if actualValue != expectedValue {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+// matchHost 检查请求 Host 是否匹配路由配置
+func matchHost(pattern, host string) bool {
+	// 处理精确匹配
+	if pattern == host {
+		return true
+	}
+
+	// 处理子域名匹配
+	if strings.HasPrefix(pattern, "*") {
+		suffix := pattern[1:]
+		return strings.HasSuffix(host, suffix)
+	}
+
+	// 处理正则表达式匹配
+	if strings.HasPrefix(pattern, "^") || strings.HasSuffix(pattern, "$") {
+		matched, err := regexp.MatchString(pattern, host)
+		if err == nil && matched {
+			return true
+		}
+	}
+
+	return false
+}

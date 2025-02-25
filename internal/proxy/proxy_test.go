@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	lb "nexus/internal/balancer"
+	"nexus/internal/service"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -24,47 +24,45 @@ const (
 
 func TestProxy_RequestFlow(t *testing.T) {
 	tests := []struct {
-		name           string
-		backendHandler http.HandlerFunc
-		expectStatus   int
-		expectBody     string
+		name         string
+		setup        *MockService
+		expectStatus int
+		expectBody   string
 	}{
 		{
 			name: "HealthyBackend",
-			backendHandler: func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(testResponseBody))
+			setup: &MockService{
+				backend: httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+					w.Write([]byte(testResponseBody))
+				})),
 			},
 			expectStatus: http.StatusOK,
 			expectBody:   testResponseBody,
 		},
 		{
-			name:           "NoBackendAvailable",
-			backendHandler: nil,
-			expectStatus:   http.StatusServiceUnavailable,
-			expectBody:     "Service unavailable",
+			name:         "NoBackendAvailable",
+			setup:        &MockService{},
+			expectStatus: http.StatusServiceUnavailable,
+			expectBody:   "Service unavailable",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var backend *httptest.Server
-			if tt.backendHandler != nil {
-				backend = httptest.NewServer(tt.backendHandler)
-				defer backend.Close()
-			}
+			mockSvc := tt.setup
+			defer mockSvc.Close()
 
-			balancer := lb.NewBalancer("round_robin")
-			if backend != nil {
-				balancer.Add(backend.URL)
-			}
+			proxy := NewProxy(&MockRouter{
+				services: map[string]service.Service{
+					"mock": mockSvc,
+				},
+			})
 
-			proxy := NewProxy(balancer)
-
-			req := httptest.NewRequest("GET", "/test", nil)
+			r := httptest.NewRequest("GET", "/test", nil)
 			w := httptest.NewRecorder()
 
-			proxy.ServeHTTP(w, req)
+			proxy.ServeHTTP(w, r)
 
 			resp := w.Result()
 			if resp.StatusCode != tt.expectStatus {
@@ -78,47 +76,55 @@ func TestProxy_RequestFlow(t *testing.T) {
 }
 
 func TestProxy_Concurrency(t *testing.T) {
-	balancer := lb.NewBalancer("round_robin")
-	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(10 * time.Millisecond)
-		w.Write([]byte(testResponseBody))
-	}))
-	defer backend.Close()
-	balancer.Add(backend.URL)
+	mockSvc := &MockService{
+		backend: httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(10 * time.Millisecond)
+			w.Write([]byte(testResponseBody))
+		})),
+	}
+	defer mockSvc.Close()
 
-	proxy := NewProxy(balancer)
+	proxy := NewProxy(&MockRouter{
+		services: map[string]service.Service{
+			"mock": mockSvc,
+		},
+	})
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			req := httptest.NewRequest("GET", "/", nil)
+			r := httptest.NewRequest("GET", "/", nil)
 			w := httptest.NewRecorder()
-			proxy.ServeHTTP(w, req)
+			proxy.ServeHTTP(w, r)
 		}()
 	}
 	wg.Wait()
 }
 
 func TestProxy_CustomTransport(t *testing.T) {
-	balancer := lb.NewBalancer("round_robin")
-	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(testResponseBody))
-	}))
-	defer backend.Close()
-	balancer.Add(backend.URL)
+	mockSvc := &MockService{
+		backend: httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(testResponseBody))
+		})),
+	}
+	defer mockSvc.Close()
 
-	proxy := NewProxy(balancer)
+	proxy := NewProxy(&MockRouter{
+		services: map[string]service.Service{
+			"mock": mockSvc,
+		},
+	})
 
 	customTransport := &http.Transport{
 		ResponseHeaderTimeout: 1 * time.Second,
 	}
 	proxy.SetTransport(customTransport)
 
-	req := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
-	proxy.ServeHTTP(w, req)
+	proxy.ServeHTTP(w, r)
 
 	if proxy.transport != customTransport {
 		t.Error("Custom transport not set properly")
@@ -127,18 +133,18 @@ func TestProxy_CustomTransport(t *testing.T) {
 
 func TestProxy_ErrorHandler(t *testing.T) {
 	tests := []struct {
-		name         string
-		setupHandler func(*Proxy)
-		expectStatus int
+		name          string
+		setErrHandler func(*Proxy)
+		expectStatus  int
 	}{
 		{
-			name:         "DefaultHandler",
-			setupHandler: func(p *Proxy) {},
-			expectStatus: http.StatusServiceUnavailable,
+			name:          "DefaultHandler",
+			setErrHandler: func(p *Proxy) {},
+			expectStatus:  http.StatusServiceUnavailable,
 		},
 		{
 			name: "CustomHandler",
-			setupHandler: func(p *Proxy) {
+			setErrHandler: func(p *Proxy) {
 				p.SetErrorHandler(func(w http.ResponseWriter, r *http.Request, err error) {
 					w.WriteHeader(http.StatusBadGateway)
 					w.Write([]byte("custom error"))
@@ -150,14 +156,17 @@ func TestProxy_ErrorHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			balancer := lb.NewBalancer("round_robin")
-			proxy := NewProxy(balancer)
-			tt.setupHandler(proxy)
+			proxy := NewProxy(&MockRouter{
+				services: map[string]service.Service{
+					"mock": &MockService{},
+				},
+			})
+			tt.setErrHandler(proxy)
 
-			req := httptest.NewRequest("GET", "/", nil)
+			r := httptest.NewRequest("GET", "/", nil)
 			w := httptest.NewRecorder()
 
-			proxy.ServeHTTP(w, req)
+			proxy.ServeHTTP(w, r)
 
 			resp := w.Result()
 			if resp.StatusCode != tt.expectStatus {
@@ -180,10 +189,19 @@ func TestTracingMiddleware(t *testing.T) {
 			propagation.Baggage{},
 		))
 
-	// 创建测试代理
-	b := lb.NewRoundRobinBalancer()
-	b.Add("http://backend1")
-	p := NewProxy(b)
+	// 创建测试服务
+	mockSvc := &MockService{
+		backend: httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(testResponseBody))
+		})),
+	}
+	defer mockSvc.Close()
+
+	p := NewProxy(&MockRouter{
+		services: map[string]service.Service{
+			"mock": mockSvc,
+		},
+	})
 	p.tracer = tp.Tracer("test")
 
 	// 创建测试请求

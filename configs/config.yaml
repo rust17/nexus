@@ -1,17 +1,18 @@
 # Proxy server listening address
 listen_addr: ":8080"
 
-# Load balancer type (round_robin, least_connections, weighted_round_robin)
-balancer_type: "weighted_round_robin"
-
-# Backend server list
-servers:
-  - address: "http://localhost:8081"
-    weight: 3
-  - address: "http://localhost:8082"
-    weight: 2
-  - address: "http://localhost:8083"
-    weight: 1
+# 服务配置
+services:
+  - name: "api-service"
+    # Load balancer type (round_robin, least_connections, weighted_round_robin)
+    balancer_type: "weighted_round_robin"
+    servers:
+      - address: "http://localhost:8081"
+        weight: 3
+      - address: "http://localhost:8082"
+        weight: 2
+      - address: "http://localhost:8083"
+        weight: 1
 
 # Health check configuration
 health_check:
@@ -24,8 +25,26 @@ log_level: "info"
 # Telemetry configuration
 telemetry:
   opentelemetry:
-    enabled: true
+    enabled: false
     endpoint: "otel-collector:4317"
     service_name: "nexus-lb"
     metrics:
       interval: "60s"
+
+# 路由配置
+routes:
+  - name: user_route
+    match:
+      path: "/api/v1/users/**"  # 路径通配符
+      headers:                 # Header匹配
+        X-Service-Group: "v2"
+    service: api-service      # 关联后端服务
+
+  - name: canary_route
+    match:
+      path: "/api/*/checkout"
+    split:                     # 流量分割
+      - service: checkout-v1
+        weight: 70
+      - service: checkout-v2
+        weight: 30

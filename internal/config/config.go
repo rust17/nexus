@@ -3,73 +3,15 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	lg "nexus/internal/logger"
 
 	"gopkg.in/yaml.v3"
 )
-
-// Config struct contains all configuration items
-type Config struct {
-	mu sync.RWMutex
-
-	// Server configuration
-	ListenAddr string `yaml:"listen_addr" json:"listen_addr"`
-
-	// Load balancer configuration
-	BalancerType string            `yaml:"balancer_type" json:"balancer_type"`
-	Servers      []ServerConfig    `yaml:"servers" json:"servers"`
-	HealthCheck  HealthCheckConfig `yaml:"health_check" json:"health_check"`
-
-	// Log configuration
-	LogLevel string `yaml:"log_level" json:"log_level"`
-
-	// Telemetry configuration
-	Telemetry TelemetryConfig `yaml:"telemetry" json:"telemetry"`
-}
-
-// ServerConfig represents a server with its weight
-type ServerConfig struct {
-	Address string `yaml:"address" json:"address"`
-	Weight  int    `yaml:"weight" json:"weight"`
-}
-
-// HealthCheckConfig health check configuration
-type HealthCheckConfig struct {
-	Interval time.Duration `yaml:"interval" json:"interval"`
-	Timeout  time.Duration `yaml:"timeout" json:"timeout"`
-	Protocol string        `yaml:"protocol" json:"protocol"`
-}
-
-// TelemetryConfig telemetry configuration
-type TelemetryConfig struct {
-	OpenTelemetry OpenTelemetryConfig `yaml:"opentelemetry" json:"opentelemetry"`
-}
-
-// OpenTelemetryConfig OpenTelemetry configuration
-type OpenTelemetryConfig struct {
-	Enabled     bool         `yaml:"enabled" json:"enabled"`
-	Endpoint    string       `yaml:"endpoint" json:"endpoint"`
-	ServiceName string       `yaml:"service_name" json:"service_name"`
-	Metrics     MetricConfig `yaml:"metrics" json:"metrics"`
-}
-
-// MetricConfig metric configuration
-type MetricConfig struct {
-	Interval time.Duration `yaml:"interval" json:"interval"`
-}
-
-// ConfigWatcher struct for file monitoring
-type ConfigWatcher struct {
-	mu       sync.RWMutex
-	filePath string
-	lastMod  time.Time
-	watchers []func(*Config)
-}
 
 // NewConfig creates a new configuration instance
 func NewConfig() *Config {
@@ -97,31 +39,6 @@ func (c *Config) LoadFromFile(path string) error {
 	}
 }
 
-// SaveToFile saves configuration to a file
-func (c *Config) SaveToFile(path string) error {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	var data []byte
-	var err error
-
-	// Decide whether to use YAML or JSON based on the file extension
-	switch filepath.Ext(path) {
-	case ".yaml", ".yml":
-		data, err = yaml.Marshal(c)
-	case ".json":
-		data, err = json.MarshalIndent(c, "", "  ")
-	default:
-		return errors.New("unsupported config file format")
-	}
-
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(path, data, 0644)
-}
-
 // GetListenAddr gets the listening address
 func (c *Config) GetListenAddr() string {
 	c.mu.RLock()
@@ -131,19 +48,29 @@ func (c *Config) GetListenAddr() string {
 }
 
 // GetBalancerType gets the load balancer type
-func (c *Config) GetBalancerType() string {
+func (c *Config) GetBalancerType(serviceName string) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	return c.BalancerType
+	sConfig, ok := c.Services[serviceName]
+	if !ok {
+		return ""
+	}
+
+	return sConfig.BalancerType
 }
 
 // GetServers gets the server list
-func (c *Config) GetServers() []ServerConfig {
+func (c *Config) GetServers(serviceName string) []ServerConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	return c.Servers
+	sConfig, ok := c.Services[serviceName]
+	if !ok {
+		return nil
+	}
+
+	return sConfig.Servers
 }
 
 // GetHealthCheckConfig gets the health check configuration
@@ -168,6 +95,14 @@ func (c *Config) GetTelemetryConfig() TelemetryConfig {
 	defer c.mu.RUnlock()
 
 	return c.Telemetry
+}
+
+// GetRouteConfig gets the route configuration
+func (c *Config) GetRouteConfig() []*RouteConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.Routes
 }
 
 // NewConfigWatcher creates a new ConfigWatcher
@@ -230,4 +165,62 @@ func (cw *ConfigWatcher) checkForUpdate() {
 			watcher(cfg)
 		}
 	}
+}
+
+// UnmarshalYAML 需要处理路由配置
+func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var raw rawConfig
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+
+	// 转换服务列表到 map
+	services := make(map[string]*ServiceConfig)
+	for _, svc := range raw.Services {
+		if svc.Name == "" {
+			return fmt.Errorf("service name is required")
+		}
+		if _, exists := services[svc.Name]; exists {
+			return fmt.Errorf("duplicate service name: %s", svc.Name)
+		}
+		services[svc.Name] = svc
+	}
+
+	c.ListenAddr = raw.ListenAddr
+	c.LogLevel = raw.LogLevel
+	c.Telemetry = raw.Telemetry
+	c.Services = services
+	c.Routes = raw.Routes
+	c.HealthCheck = raw.HealthCheck
+
+	return nil
+}
+
+// UnmarshalJSON 需要处理路由配置
+func (c *Config) UnmarshalJSON(data []byte) error {
+	var raw rawConfig
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// 转换服务列表到 map
+	services := make(map[string]*ServiceConfig)
+	for _, svc := range raw.Services {
+		if svc.Name == "" {
+			return fmt.Errorf("service name is required")
+		}
+		if _, exists := services[svc.Name]; exists {
+			return fmt.Errorf("duplicate service name: %s", svc.Name)
+		}
+		services[svc.Name] = svc
+	}
+
+	c.ListenAddr = raw.ListenAddr
+	c.LogLevel = raw.LogLevel
+	c.Telemetry = raw.Telemetry
+	c.Services = services
+	c.Routes = raw.Routes
+	c.HealthCheck = raw.HealthCheck
+
+	return nil
 }

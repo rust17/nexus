@@ -18,14 +18,28 @@ func Validate(filePath string) error {
 	if err := validateListenAddr(c.ListenAddr); err != nil {
 		return err
 	}
-	if err := validateBalancerType(c.BalancerType); err != nil {
-		return err
-	}
 	if err := validateLogLevel(c.LogLevel); err != nil {
 		return err
 	}
-	if err := validateServers(c.Servers, c.BalancerType); err != nil {
-		return err
+
+	// 校验每个服务
+	for _, svc := range c.Services {
+		if svc.Name == "" {
+			return errors.New("service name cannot be empty")
+		}
+		if err := validateBalancerType(svc.BalancerType); err != nil {
+			return fmt.Errorf("service %s: %w", svc.Name, err)
+		}
+		if err := validateServers(svc.Servers, svc.BalancerType); err != nil {
+			return fmt.Errorf("service %s: %w", svc.Name, err)
+		}
+	}
+
+	// 校验路由配置
+	for _, route := range c.Routes {
+		if err := validateRoute(route); err != nil {
+			return fmt.Errorf("route %s: %w", route.Name, err)
+		}
 	}
 
 	return validateHealthCheck(c.HealthCheck.Interval, c.HealthCheck.Timeout)
@@ -99,6 +113,36 @@ func validateHealthCheck(interval, timeout time.Duration) error {
 	}
 	if timeout >= interval {
 		return errors.New("health check timeout must be less than interval")
+	}
+
+	return nil
+}
+
+// validateRoute 校验路由配置
+func validateRoute(route *RouteConfig) error {
+	if route.Name == "" {
+		return errors.New("route name cannot be empty")
+	}
+	if route.Match.Path == "" && route.Match.Method == "" && route.Match.Host == "" && len(route.Match.Headers) == 0 {
+		return fmt.Errorf("route %s: match condition cannot be empty", route.Name)
+	}
+	if route.Service == "" && len(route.Split) == 0 {
+		return fmt.Errorf("route %s: must specify either service or split", route.Name)
+	}
+	if len(route.Split) > 0 {
+		totalWeight := 0
+		for _, split := range route.Split {
+			if split.Service == "" {
+				return fmt.Errorf("route %s: split service cannot be empty", route.Name)
+			}
+			if split.Weight <= 0 {
+				return fmt.Errorf("route %s: split weight must be positive", route.Name)
+			}
+			totalWeight += split.Weight
+		}
+		if totalWeight != 100 {
+			return fmt.Errorf("route %s: split weights must sum to 100", route.Name)
+		}
 	}
 
 	return nil

@@ -11,6 +11,7 @@ type Balancer interface {
 	Add(server string)
 	Remove(server string)
 	UpdateServers(servers []config.ServerConfig)
+	Type() string
 }
 
 // NewBalancer creates a new load balancer based on the type

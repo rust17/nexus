@@ -6,6 +6,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"nexus/internal/balancer"
+	"nexus/internal/route"
 	"sync"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -18,16 +19,16 @@ import (
 // Proxy struct represents a reverse proxy
 type Proxy struct {
 	mu           sync.RWMutex
-	balancer     balancer.Balancer
+	router       route.Router
 	transport    http.RoundTripper
 	errorHandler func(http.ResponseWriter, *http.Request, error)
 	tracer       trace.Tracer
 }
 
 // NewProxy creates a new reverse proxy instance
-func NewProxy(balancer balancer.Balancer) *Proxy {
+func NewProxy(router route.Router) *Proxy {
 	return &Proxy{
-		balancer:  balancer,
+		router:    router,
 		transport: http.DefaultTransport,
 		tracer:    otel.Tracer("nexus.proxy"),
 	}
@@ -44,11 +45,13 @@ func (p *Proxy) tracingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
+		service := p.router.Match(r)
+
 		// 创建包含负载均衡信息的span
 		ctx, span := p.tracer.Start(ctx, "Proxy.Request",
 			trace.WithAttributes(
-				attribute.String("lb.strategy", p.getBalancerStrategy()),
-				attribute.Int("backend.count", p.getBackendCount()),
+				attribute.String("lb.strategy", p.getBalancerStrategy(service.Balancer())),
+				attribute.Int("backend.count", p.getBackendCount(service.Balancer())),
 			))
 		defer span.End()
 
@@ -64,8 +67,8 @@ func (p *Proxy) tracingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func (p *Proxy) getBalancerStrategy() string {
-	switch p.balancer.(type) {
+func (p *Proxy) getBalancerStrategy(b balancer.Balancer) string {
+	switch b.(type) {
 	case *balancer.RoundRobinBalancer:
 		return "round_robin"
 	case *balancer.WeightedRoundRobinBalancer:
@@ -77,8 +80,8 @@ func (p *Proxy) getBalancerStrategy() string {
 	}
 }
 
-func (p *Proxy) getBackendCount() int {
-	switch b := p.balancer.(type) {
+func (p *Proxy) getBackendCount(b balancer.Balancer) int {
+	switch b := b.(type) {
 	case *balancer.RoundRobinBalancer:
 		return len(b.GetServers())
 	case *balancer.WeightedRoundRobinBalancer:
@@ -105,7 +108,9 @@ func (p *Proxy) createClientTrace(span trace.Span) *httptrace.ClientTrace {
 // handleRequest handles the request
 func (p *Proxy) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// 选择后端服务器
-	target, err := p.balancer.Next(r.Context())
+	service := p.router.Match(r)
+	target, err := service.NextServer(r.Context())
+
 	if err != nil {
 		p.handleError(w, r, err)
 		return

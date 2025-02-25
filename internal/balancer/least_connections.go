@@ -134,3 +134,7 @@ func (b *LeastConnectionsBalancer) UpdateServers(servers []config.ServerConfig) 
 func (b *LeastConnectionsBalancer) GetServers() []LeastConnectionsServer {
 	return b.servers
 }
+
+func (b *LeastConnectionsBalancer) Type() string {
+	return "least_connections"
+}

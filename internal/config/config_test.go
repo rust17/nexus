@@ -1,12 +1,14 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,12 +21,19 @@ func TestConfigLoad_ValidConfig(t *testing.T) {
 
 	configContent := `
 listen_addr: ":8080"
-balancer_type: "round_robin"
-servers:
-  - address: "http://localhost:8081"
-    weight: 1
-  - address: "http://localhost:8082"
-    weight: 1
+services:
+  - name: "web-service"
+    balancer_type: "round_robin"
+    servers:
+      - address: "http://backend1:8080"
+      - address: "http://backend2:8080"
+  - name: "api-service"
+    balancer_type: "weighted_round_robin"
+    servers:
+      - address: "http://api1:8080"
+        weight: 3
+      - address: "http://api2:8080"
+        weight: 2
 health_check:
   interval: 10s
   timeout: 2s
@@ -42,12 +51,21 @@ log_level: "debug"
 		t.Errorf("Expected listen_addr :8080, got %s", cfg.GetListenAddr())
 	}
 
-	if cfg.GetBalancerType() != "round_robin" {
-		t.Errorf("Expected balancer_type round_robin, got %s", cfg.GetBalancerType())
+	if cfg.GetBalancerType("web-service") != "round_robin" {
+		t.Errorf("Expected balancer_type round_robin, got %s", cfg.GetBalancerType("web-service"))
 	}
 
-	servers := cfg.GetServers()
-	if len(servers) != 2 || servers[0].Address != "http://localhost:8081" || servers[1].Address != "http://localhost:8082" {
+	if cfg.GetBalancerType("api-service") != "weighted_round_robin" {
+		t.Errorf("Expected balancer_type weighted_round_robin, got %s", cfg.GetBalancerType("api-service"))
+	}
+
+	servers := cfg.GetServers("web-service")
+	if len(servers) != 2 || servers[0].Address != "http://backend1:8080" || servers[1].Address != "http://backend2:8080" {
+		t.Errorf("Unexpected servers list: %v", servers)
+	}
+
+	servers = cfg.GetServers("api-service")
+	if len(servers) != 2 || servers[0].Address != "http://api1:8080" || servers[1].Address != "http://api2:8080" {
 		t.Errorf("Unexpected servers list: %v", servers)
 	}
 
@@ -94,10 +112,12 @@ func TestConfigHotReload(t *testing.T) {
 	// 创建临时配置文件
 	configContent := `
 listen_addr: ":8080"
-balancer_type: "round_robin"
-servers:
-  - address: "http://localhost:8081"
-    weight: 1
+services:
+  - name: "web-service"
+    balancer_type: "round_robin"
+    servers:
+      - address: "http://backend1:8080"
+      - address: "http://backend2:8080"
 health_check:
   interval: 10s
   timeout: 2s
@@ -109,9 +129,10 @@ log_level: "info"
 	// 初始化配置监控器
 	watcher := NewConfigWatcher(configFile)
 
-	var updated bool
+	// 使用原子操作
+	var updated int32
 	watcher.Watch(func(cfg *Config) {
-		updated = true
+		atomic.StoreInt32(&updated, 1) // 使用原子存储
 	})
 
 	go watcher.Start()
@@ -119,10 +140,14 @@ log_level: "info"
 	// 修改配置文件
 	newConfigContent := `
 listen_addr: ":8081"
-balancer_type: "weighted_round_robin"
-servers:
-  - address: "http://localhost:8082"
-    weight: 2
+services:
+  - name: "api-service"
+    balancer_type: "weighted_round_robin"
+    servers:
+      - address: "http://api1:8080"
+        weight: 3
+      - address: "http://api2:8080"
+        weight: 2
 health_check:
   interval: 5s
   timeout: 1s
@@ -134,7 +159,7 @@ log_level: "debug"
 
 	// 等待更新
 	time.Sleep(1 * time.Second)
-	if !updated {
+	if atomic.LoadInt32(&updated) == 0 {
 		t.Error("Config update not detected")
 	}
 }
@@ -150,9 +175,12 @@ func TestConfigLoad_InValidConfig(t *testing.T) {
 		{
 			name: "EmptyListenAddr",
 			config: `
-balancer_type: "round_robin"
-servers:
-  - address: "http://localhost:8081"
+services:
+  - name: "web-service"
+    balancer_type: "round_robin"
+    servers:
+      - address: "http://backend1:8080"
+      - address: "http://backend2:8080"
 health_check:
   interval: 10s
   timeout: 2s
@@ -163,9 +191,12 @@ health_check:
 			name: "InvalidBalancerType",
 			config: `
 listen_addr: ":8080"
-balancer_type: "invalid_type"
-servers:
-  - address: "http://localhost:8081"
+services:
+  - name: "web-service"
+    balancer_type: "invalid_type"
+    servers:
+      - address: "http://backend1:8080"
+      - address: "http://backend2:8080"
 health_check:
   interval: 10s
   timeout: 2s
@@ -176,7 +207,9 @@ health_check:
 			name: "EmptyServerList",
 			config: `
 listen_addr: ":8080"
-balancer_type: "round_robin"
+services:
+  - name: "web-service"
+    balancer_type: "round_robin"
 health_check:
   interval: 10s
   timeout: 2s
@@ -187,9 +220,11 @@ health_check:
 			name: "EmptyServerAddress",
 			config: `
 listen_addr: ":8080"
-balancer_type: "round_robin"
-servers:
-  - address: ""
+services:
+  - name: "web-service"
+    balancer_type: "round_robin"
+    servers:
+      - address: ""
 health_check:
   interval: 10s
   timeout: 2s
@@ -200,9 +235,12 @@ health_check:
 			name: "InvalidHealthCheckInterval",
 			config: `
 listen_addr: ":8080"
-balancer_type: "round_robin"
-servers:
-  - address: "http://localhost:8081"
+services:
+  - name: "web-service"
+    balancer_type: "round_robin"
+    servers:
+      - address: "http://backend1:8080"
+      - address: "http://backend2:8080"
 health_check:
   interval: 0s
   timeout: 2s
@@ -213,9 +251,12 @@ health_check:
 			name: "InvalidHealthCheckTimeout",
 			config: `
 listen_addr: ":8080"
-balancer_type: "round_robin"
-servers:
-  - address: "http://localhost:8081"
+services:
+  - name: "web-service"
+    balancer_type: "round_robin"
+    servers:
+      - address: "http://backend1:8080"
+      - address: "http://backend2:8080"
 health_check:
   interval: 10s
   timeout: 0s
@@ -226,9 +267,12 @@ health_check:
 			name: "TimeoutGreaterThanInterval",
 			config: `
 listen_addr: ":8080"
-balancer_type: "round_robin"
-servers:
-  - address: "http://localhost:8081"
+services:
+  - name: "web-service"
+    balancer_type: "round_robin"
+    servers:
+      - address: "http://backend1:8080"
+      - address: "http://backend2:8080"
 health_check:
   interval: 5s
   timeout: 10s
@@ -239,9 +283,12 @@ health_check:
 			name: "InvalidLogLevel",
 			config: `
 listen_addr: ":8080"
-balancer_type: "round_robin"
-servers:
-  - address: "http://localhost:8081"
+services:
+  - name: "web-service"
+    balancer_type: "round_robin"
+    servers:
+      - address: "http://backend1:8080"
+      - address: "http://backend2:8080"
 health_check:
   interval: 10s
   timeout: 2s
@@ -253,10 +300,12 @@ log_level: "invalid_level"
 			name: "InvalidWeightedRoundRobin",
 			config: `
 listen_addr: ":8080"
-balancer_type: "weighted_round_robin"
-servers:
-  - address: "http://localhost:8081"
-    weight: 0
+services:
+  - name: "api-service"
+    balancer_type: "weighted_round_robin"
+    servers:
+      - address: "http://api1:8080"
+        weight: 0
 health_check:
   interval: 10s
   timeout: 2s
@@ -327,10 +376,12 @@ func TestUpdateBalancerType(t *testing.T) {
 	t.Parallel()
 
 	cfg := NewConfig()
+	cfg.Services = make(map[string]*ServiceConfig)
+	cfg.Services["web-service"] = &ServiceConfig{} // 初始化服务配置
 
 	// 初始值测试
-	if cfg.GetBalancerType() != "" {
-		t.Errorf("Expected empty balancer type, got %s", cfg.GetBalancerType())
+	if cfg.GetBalancerType("web-service") != "" {
+		t.Errorf("Expected empty balancer type, got %s", cfg.GetBalancerType("web-service"))
 	}
 
 	// 正常更新测试
@@ -346,10 +397,10 @@ func TestUpdateBalancerType(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.input, func(t *testing.T) {
-				if err := cfg.UpdateBalancerType(tc.input); err != nil {
+				if err := cfg.UpdateBalancerType("web-service", tc.input); err != nil {
 					t.Fatalf("Unexpected error: %v", err)
 				}
-				if actual := cfg.GetBalancerType(); actual != tc.expected {
+				if actual := cfg.GetBalancerType("web-service"); actual != tc.expected {
 					t.Errorf("Expected %s, got %s", tc.expected, actual)
 				}
 			})
@@ -358,7 +409,7 @@ func TestUpdateBalancerType(t *testing.T) {
 
 	// 无效类型测试
 	t.Run("InvalidType", func(t *testing.T) {
-		err := cfg.UpdateBalancerType("invalid_type")
+		err := cfg.UpdateBalancerType("web-service", "invalid_type")
 		if err == nil {
 			t.Fatal("Expected error but got nil")
 		}
@@ -376,13 +427,15 @@ func TestUpdateBalancerType(t *testing.T) {
 
 		// 重置配置确保测试独立性
 		cfg = NewConfig()
+		cfg.Services = make(map[string]*ServiceConfig)
+		cfg.Services["web-service"] = &ServiceConfig{} // 初始化服务配置
 
 		for i := 0; i < total; i++ {
 			wg.Add(1)
 			go func(index int) {
 				defer wg.Done()
 				bType := types[index%3]
-				cfg.UpdateBalancerType(bType)
+				cfg.UpdateBalancerType("web-service", bType)
 			}(i)
 		}
 
@@ -391,7 +444,7 @@ func TestUpdateBalancerType(t *testing.T) {
 		// 验证最终结果
 		var updateCount int
 		for i := 0; i < total; i++ {
-			if cfg.GetBalancerType() == types[i%3] {
+			if cfg.GetBalancerType("web-service") == types[i%3] {
 				updateCount++
 			}
 		}
@@ -405,11 +458,14 @@ func TestUpdateServers(t *testing.T) {
 	t.Parallel()
 
 	cfg := NewConfig()
-	cfg.UpdateBalancerType("round_robin") // 初始化负载均衡类型
+	cfg.Services = make(map[string]*ServiceConfig)
+	cfg.Services["web-service"] = &ServiceConfig{
+		BalancerType: "round_robin",
+	} // 初始化服务配置
 
 	// 初始值测试
-	if len(cfg.GetServers()) != 0 {
-		t.Errorf("Expected empty servers, got %v", cfg.GetServers())
+	if len(cfg.GetServers("web-service")) != 0 {
+		t.Errorf("Expected empty servers, got %v", cfg.GetServers("web-service"))
 	}
 
 	// 正常更新测试
@@ -419,11 +475,11 @@ func TestUpdateServers(t *testing.T) {
 			{Address: "http://server2", Weight: 1},
 		}
 
-		if err := cfg.UpdateServers(validServers); err != nil {
+		if err := cfg.UpdateServers("web-service", validServers); err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 
-		if actual := cfg.GetServers(); !reflect.DeepEqual(actual, validServers) {
+		if actual := cfg.GetServers("web-service"); !reflect.DeepEqual(actual, validServers) {
 			t.Errorf("Expected %v, got %v", validServers, actual)
 		}
 	})
@@ -453,7 +509,7 @@ func TestUpdateServers(t *testing.T) {
 				servers: []ServerConfig{
 					{Address: "http://server1", Weight: 0},
 				},
-				setup:       func() { cfg.UpdateBalancerType("weighted_round_robin") },
+				setup:       func() { cfg.UpdateBalancerType("web-service", "weighted_round_robin") },
 				expectedErr: "invalid weight for server http://server1: 0",
 			},
 		}
@@ -463,7 +519,7 @@ func TestUpdateServers(t *testing.T) {
 				if tc.setup != nil {
 					tc.setup()
 				}
-				err := cfg.UpdateServers(tc.servers)
+				err := cfg.UpdateServers("web-service", tc.servers)
 				if err == nil || !strings.Contains(err.Error(), tc.expectedErr) {
 					t.Errorf("Expected error containing %q, got %v", tc.expectedErr, err)
 				}
@@ -485,14 +541,14 @@ func TestUpdateServers(t *testing.T) {
 			go func(index int) {
 				defer wg.Done()
 				servers := testServers[index%3]
-				cfg.UpdateServers(servers)
-				_ = cfg.GetServers()
+				cfg.UpdateServers("web-service", servers)
+				_ = cfg.GetServers("web-service")
 			}(i)
 		}
 		wg.Wait()
 
 		// 验证最终一致性
-		finalServers := cfg.GetServers()
+		finalServers := cfg.GetServers("web-service")
 		valid := false
 		for _, s := range testServers {
 			if reflect.DeepEqual(finalServers, s) {
@@ -751,4 +807,358 @@ telemetry:
 		}
 		wg.Wait()
 	})
+}
+
+// 路由配置测试
+func TestRouteConfig(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name        string
+		config      string
+		expectedErr string
+	}{
+		{
+			name: "valid_route_with_service",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "user_route"
+    match:
+      path: "/api/v1/users/**"
+    service: "user-service"
+`,
+			expectedErr: "",
+		},
+		{
+			name: "valid_route_with_split",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "canary_route"
+    match:
+      path: "/api/*/checkout"
+    split:
+      - service: "checkout-v1"
+        weight: 70
+      - service: "checkout-v2"
+        weight: 30
+`,
+			expectedErr: "",
+		},
+		{
+			name: "invalid_route_missing_name",
+			config: `
+listen_addr: ":8080"
+routes:
+  - match:
+      path: "/api/v1/users/**"
+    service: "user-service"
+`,
+			expectedErr: "route name cannot be empty",
+		},
+		{
+			name: "invalid_route_missing_match",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "user_route"
+    service: "user-service"
+`,
+			expectedErr: "match condition cannot be empty",
+		},
+		{
+			name: "invalid_route_missing_service_and_split",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "user_route"
+    match:
+      path: "/api/v1/users/**"
+`,
+			expectedErr: "must specify either service or split",
+		},
+		{
+			name: "invalid_route_split_weights",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "canary_route"
+    match:
+      path: "/api/*/checkout"
+    split:
+      - service: "checkout-v1"
+        weight: 60
+      - service: "checkout-v2"
+        weight: 30
+`,
+			expectedErr: "split weights must sum to 100",
+		},
+		{
+			name: "invalid_route_empty_split_service",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "canary_route"
+    match:
+      path: "/api/*/checkout"
+    split:
+      - service: ""
+        weight: 50
+      - service: "checkout-v2"
+        weight: 50
+`,
+			expectedErr: "split service cannot be empty",
+		},
+		{
+			name: "invalid_route_negative_split_weight",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "canary_route"
+    match:
+      path: "/api/*/checkout"
+    split:
+      - service: "checkout-v1"
+        weight: -10
+      - service: "checkout-v2"
+        weight: 110
+`,
+			expectedErr: "split weight must be positive",
+		},
+		{
+			name: "valid_route_with_header_match",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "header_route"
+    match:
+      headers:
+        X-Service-Group: "v2"
+    service: "user-service"
+`,
+			expectedErr: "",
+		},
+		{
+			name: "valid_route_with_method_match",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "method_route"
+    match:
+      method: "GET"
+    service: "user-service"
+`,
+			expectedErr: "",
+		},
+		{
+			name: "valid_route_with_host_match",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "host_route"
+    match:
+      host: "example.com"
+    service: "user-service"
+`,
+			expectedErr: "",
+		},
+		{
+			name: "valid_route_with_multiple_match_conditions",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "complex_route"
+    match:
+      path: "/api/v1/users/**"
+      method: "POST"
+      host: "api.example.com"
+      headers:
+        X-Service-Group: "v2"
+    service: "user-service"
+`,
+			expectedErr: "",
+		},
+		{
+			name: "invalid_route_with_zero_split_weight",
+			config: `
+listen_addr: ":8080"
+routes:
+  - name: "canary_route"
+    match:
+      path: "/api/*/checkout"
+    split:
+      - service: "checkout-v1"
+        weight: 0
+      - service: "checkout-v2"
+        weight: 100
+`,
+			expectedErr: "split weight must be positive",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := NewConfig()
+			tmpFile := createTempConfigFile(t, tc.config)
+			require.NoError(t, cfg.LoadFromFile(tmpFile))
+
+			routeCfgs := cfg.GetRouteConfig()
+			for _, cfg := range routeCfgs {
+				err := validateRoute(cfg)
+				if tc.expectedErr == "" {
+					if err != nil {
+						t.Fatalf("Unexpected error: %v", err)
+					}
+				} else {
+					if err == nil || !strings.Contains(err.Error(), tc.expectedErr) {
+						t.Errorf("Expected error containing %q, got %v", tc.expectedErr, err)
+					}
+				}
+			}
+		})
+	}
+
+	// 测试路由配置的并发更新
+	t.Run("concurrent_update", func(t *testing.T) {
+		cfg := NewConfig()
+		initialRoutes := []*RouteConfig{
+			{
+				Name: "user_route",
+				Match: RouteMatch{
+					Path: "/api/v1/users/**",
+				},
+				Service: "user-service",
+			},
+		}
+
+		// 初始化配置
+		err := cfg.UpdateRoutes(initialRoutes)
+		require.NoError(t, err)
+
+		var wg sync.WaitGroup
+		updateCount := 100
+
+		// 并发更新路由配置
+		for i := 0; i < updateCount; i++ {
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				newRoutes := []*RouteConfig{
+					{
+						Name: fmt.Sprintf("route_%d", index),
+						Match: RouteMatch{
+							Path: fmt.Sprintf("/api/v%d/**", index),
+						},
+						Service: fmt.Sprintf("service_%d", index),
+					},
+				}
+				_ = cfg.UpdateRoutes(newRoutes)
+			}(i)
+		}
+
+		wg.Wait()
+
+		// 验证最终结果
+		finalRoutes := cfg.Routes
+		if len(finalRoutes) != 1 {
+			t.Errorf("Expected 1 route after concurrent updates, got %d", len(finalRoutes))
+		}
+
+		// 检查路由名称是否符合预期格式
+		if !strings.HasPrefix(finalRoutes[0].Name, "route_") {
+			t.Errorf("Unexpected route name format: %s", finalRoutes[0].Name)
+		}
+	})
+}
+
+// 测试 JSON 配置解析
+func TestUnmarshalJSON(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name        string
+		config      string
+		expectedErr string
+	}{
+		{
+			name: "valid_json_config",
+			config: `{
+				"listen_addr": ":8080",
+				"routes": [
+					{
+						"name": "user_route",
+						"match": {
+							"path": "/api/v1/users/**"
+						},
+						"service": "user-service"
+					}
+				]
+			}`,
+			expectedErr: "",
+		},
+		{
+			name: "invalid_json_format",
+			config: `{
+				"listen_addr": ":8080",
+				"routes": [
+					{
+						"name": "user_route",
+						"match": {
+							"path": "/api/v1/users/**"
+						},
+						"service": "user-service"
+					},
+				]
+			}`,
+			expectedErr: "invalid character",
+		},
+		{
+			name: "missing_required_field",
+			config: `{
+				"listen_addr": ":8080",
+				"services": [
+					{
+						"name": "",
+						"balancer_type": "round_robin",
+						"servers": [
+							{
+								"address": "http://localhost:8081"
+							}
+						]
+					}
+				]
+			}`,
+			expectedErr: "service name is required",
+		},
+		{
+			name: "invalid_route_config",
+			config: `{
+				"listen_addr": ":8080",
+				"services": [
+					{
+						"name": "user-service"
+					},
+					{
+						"name": "user-service"
+					}
+				]
+			}`,
+			expectedErr: "duplicate service name",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := NewConfig()
+			err := json.Unmarshal([]byte(tc.config), cfg)
+
+			if tc.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.expectedErr)
+			}
+		})
+	}
 }

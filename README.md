@@ -5,26 +5,54 @@
 ```mermaid
 graph LR
     Client --> NexusProxy(Nexus Proxy)
-    NexusProxy --> LoadBalancer(Load Balancer)
-    LoadBalancer --> BackendServer1(Backend Server 1)
-    LoadBalancer --> BackendServer2(Backend Server 2)
-    LoadBalancer --> BackendServerN(Backend Server N)
+    NexusProxy --> Router(Router)
+    Router --> Service1(Service1)
+    Router --> Service2(Service2)
+    Router --> ServiceN(ServiceN)
+    Service1 --> LoadBalancer1(Load Balancer1)
+    Service2 --> LoadBalancer2(Load Balancer2)
+    ServiceN --> LoadBalancerN(Load BalancerN)
+    LoadBalancer1 --> BackendServer1(Backend Server 1)
+    LoadBalancer1 --> BackendServer2(Backend Server 2)
+    LoadBalancer1 --> BackendServer3(Backend Server 3)
+    LoadBalancer2 --> BackendServer4(Backend Server 4)
+    LoadBalancer2 --> BackendServer5(Backend Server 5)
+    LoadBalancer2 --> BackendServer6(Backend Server 6)
+    LoadBalancerN --> BackendServer7(Backend Server 7)
+    LoadBalancerN --> BackendServer8(Backend Server 8)
+    LoadBalancerN --> BackendServer9(Backend Server 9)
     NexusProxy --> HealthChecker(Health Checker)
     HealthChecker --> BackendServer1
     HealthChecker --> BackendServer2
-    HealthChecker --> BackendServerN
+    HealthChecker --> BackendServer3
+    HealthChecker --> BackendServer4
+    HealthChecker --> BackendServer5
+    HealthChecker --> BackendServer6
+    HealthChecker --> BackendServer7
+    HealthChecker --> BackendServer8
+    HealthChecker --> BackendServer9
     Configuration(config.yaml) --> NexusProxy
 
     style NexusProxy fill:#f9f,stroke:#333,stroke-width:2px
-    style LoadBalancer fill:#ff9966,stroke:#333,stroke-width:2px
+    style Router fill:#ff9966,stroke:#333,stroke-width:2px
     style HealthChecker fill:#cfc,stroke:#333,stroke-width:2px
     style BackendServer1 fill:#eee,stroke:#333,stroke-width:2px
     style BackendServer2 fill:#eee,stroke:#333,stroke-width:2px
-    style BackendServerN fill:#eee,stroke:#333,stroke-width:2px
+    style BackendServer2 fill:#eee,stroke:#333,stroke-width:2px
+    style BackendServer3 fill:#eee,stroke:#333,stroke-width:2px
+    style BackendServer4 fill:#eee,stroke:#333,stroke-width:2px
+    style BackendServer5 fill:#eee,stroke:#333,stroke-width:2px
+    style BackendServer6 fill:#eee,stroke:#333,stroke-width:2px
+    style BackendServer7 fill:#eee,stroke:#333,stroke-width:2px
+    style BackendServer8 fill:#eee,stroke:#333,stroke-width:2px
+    style BackendServer9 fill:#eee,stroke:#333,stroke-width:2px
     style Configuration fill:#ffc,stroke:#333,stroke-width:2px
+    style Service1 fill:#ffc,stroke:#333,stroke-width:2px
+    style Service2 fill:#ffc,stroke:#333,stroke-width:2px
+    style ServiceN fill:#ffc,stroke:#333,stroke-width:2px
 
     classDef component fill:#f9f,stroke:#333,stroke-width:2px
-    class NexusProxy,LoadBalancer,HealthChecker,BackendServer1,BackendServer2,BackendServerN component
+    class NexusProxy,Router,HealthChecker,Service1,Service2,ServiceN,LoadBalancer1,LoadBalancer2,LoadBalancerN,BackendServer1,BackendServer2,BackendServer3,BackendServer4,BackendServer5,BackendServer6,BackendServer7,BackendServer8,BackendServer9,BackendServerN component
 ```
 
 ## Features

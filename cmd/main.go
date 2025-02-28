@@ -41,14 +41,20 @@ func main() {
 
 	// Initialize health checker
 	healthCheckCfg := cfg.GetHealthCheckConfig()
-	healthChecker := healthcheck.NewHealthChecker(healthCheckCfg.Interval, healthCheckCfg.Timeout)
-	for _, server := range cfg.Services {
-		for _, s := range server.Servers {
-			healthChecker.AddServer(s.Address)
+	healthChecker := healthcheck.NewHealthChecker(
+		healthCheckCfg.Enabled,
+		healthCheckCfg.Interval,
+		healthCheckCfg.Timeout,
+		healthCheckCfg.Path)
+	if healthChecker != nil {
+		for _, server := range cfg.Services {
+			for _, s := range server.Servers {
+				healthChecker.AddServer(s.Address)
+			}
 		}
+		go healthChecker.Start()
+		defer healthChecker.Stop()
 	}
-	go healthChecker.Start()
-	defer healthChecker.Stop()
 
 	// Initialize reverse proxy
 	router := route.NewRouter(cfg.Routes, cfg.Services)
@@ -80,8 +86,10 @@ func main() {
 		router.Update(newCfg.Routes, newCfg.Services)
 
 		// Update health check
-		healthChecker.UpdateInterval(newCfg.GetHealthCheckConfig().Interval)
-		healthChecker.UpdateTimeout(newCfg.GetHealthCheckConfig().Timeout)
+		if healthChecker != nil {
+			healthChecker.UpdateInterval(newCfg.GetHealthCheckConfig().Interval)
+			healthChecker.UpdateTimeout(newCfg.GetHealthCheckConfig().Timeout)
+		}
 
 		// Update log level
 		logger.SetLevel(logger.ToLogLevel(newCfg.GetLogLevel()))

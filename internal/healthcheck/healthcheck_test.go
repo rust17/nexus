@@ -61,7 +61,7 @@ func TestHealthChecker(t *testing.T) {
 			defer ts.Close()
 
 			// Create health checker
-			checker := NewHealthChecker(healthCheckInterval, healthCheckTimeout)
+			checker := NewHealthChecker(true, healthCheckInterval, healthCheckTimeout, "/health")
 			checker.AddServer(ts.URL)
 			go checker.Start()
 			defer checker.Stop()
@@ -93,7 +93,7 @@ func TestHealthChecker_RemoveServer(t *testing.T) {
 	defer ts.Close()
 
 	// Create health checker
-	checker := NewHealthChecker(healthCheckInterval, healthCheckTimeout)
+	checker := NewHealthChecker(true, healthCheckInterval, healthCheckTimeout, "/healthy")
 	checker.AddServer(ts.URL)
 	go checker.Start()
 	defer checker.Stop()
@@ -114,7 +114,7 @@ func TestHealthChecker_RemoveServer(t *testing.T) {
 }
 
 func TestHealthChecker_UpdateConfig(t *testing.T) {
-	healthChecker := NewHealthChecker(10*time.Second, 1*time.Second)
+	healthChecker := NewHealthChecker(true, 10*time.Second, 1*time.Second, "/health")
 	healthChecker.AddServer("http://server1:8080")
 
 	// Update interval and timeout
@@ -184,7 +184,7 @@ func TestHealthCheckTracing(t *testing.T) {
 			tt.wantAttributes[attribute.Key("service.address")] = attribute.StringValue(ts.URL)
 
 			// Create health checker
-			checker := NewHealthChecker(10*time.Millisecond, 1*time.Second)
+			checker := NewHealthChecker(true, 10*time.Millisecond, 1*time.Second, "/health")
 			checker.AddServer(ts.URL)
 			go checker.Start()
 			defer checker.Stop()

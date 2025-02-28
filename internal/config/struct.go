@@ -74,9 +74,10 @@ type ServerConfig struct {
 
 // HealthCheckConfig health check configuration
 type HealthCheckConfig struct {
+	Enabled  bool          `yaml:"enabled" json:"enabled"`
 	Interval time.Duration `yaml:"interval" json:"interval"`
 	Timeout  time.Duration `yaml:"timeout" json:"timeout"`
-	Protocol string        `yaml:"protocol" json:"protocol"`
+	Path     string        `yaml:"path" json:"path"`
 }
 
 // TelemetryConfig telemetry configuration

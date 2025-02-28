@@ -22,6 +22,7 @@ type HealthChecker struct {
 	interval time.Duration
 	timeout  time.Duration
 	stopChan chan struct{}
+	path     string
 }
 
 type serverInfo struct {
@@ -31,12 +32,17 @@ type serverInfo struct {
 }
 
 // NewHealthChecker creates a new health checker
-func NewHealthChecker(interval, timeout time.Duration) *HealthChecker {
+func NewHealthChecker(enabled bool, interval, timeout time.Duration, path string) *HealthChecker {
+	if !enabled {
+		return nil
+	}
+
 	return &HealthChecker{
 		servers:  make(map[string]*serverInfo),
 		interval: interval,
 		timeout:  timeout,
 		stopChan: make(chan struct{}),
+		path:     path,
 	}
 }
 
@@ -135,7 +141,7 @@ func (h *HealthChecker) checkAllServers() {
 }
 
 func (h *HealthChecker) httpCheck(ctx context.Context, address string) error {
-	req, err := http.NewRequestWithContext(ctx, "GET", address+"/health", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", address+h.path, nil)
 	if err != nil {
 		return err
 	}

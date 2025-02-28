@@ -223,31 +223,24 @@ nexus/
 
 ## Usage Examples
 
-### HTTP Reverse Proxy and Load Balancing
+### HTTP Reverse Proxy
 
 Configure the `config.yaml` file as follows:
 ```yml
 listen_addr: ":8080"
 services:
   - name: "api-service"
-    balancer_type: "round_robin"
     servers:
       - address: "http://192.168.1.100:8081"
-      - address: "http://192.168.1.101:8081"
-health_check:
-  enabled: true
-  interval: 10s
-  timeout: 2s
-  path: "/health"
-  protocol: "http"
 routes:
   - name: "api-route"
     match:
-      path: "/**"
+      path: "*"
+      host: "api.example.com"
     service: "api-service"
 ```
 
-After starting Nexus, all HTTP requests sent to `http://localhost:8080` will be round-robin load balanced to the backend servers `192.168.1.100:8081` and `192.168.1.101:8081`. Nexus will periodically check the `/health` path of the backend servers to ensure that only requests are sent to healthy servers.
+After starting Nexus, all HTTP requests sent to `http://localhost:8080` will be proxied to the backend servers `192.168.1.100:8081`.
 
 ### Route Configuration with Traffic Splitting
 
@@ -286,33 +279,55 @@ This configuration demonstrates a canary deployment setup where:
 1. Requests with the header `X-Debug: true` will be split between api-v1 (approximately 80%) and api-v2 (approximately 20%)
 2. All other API requests will be routed to api-v1 only
 
-### gRPC Reverse Proxy and Load Balancing
+### Path-based Routing Configuration and Load Balancing
 
 Configure the `config.yaml` file as follows:
 ```yaml
 listen_addr: ":8080"
 services:
-  - name: "grpc-service"
+  - name: "user-service"
+    balancer_type: "least_connections"
+    servers:
+      - address: "http://user-service-1:8081"
+      - address: "http://user-service-2:8081"
+  - name: "order-service"
+    balancer_type: "round_robin"
+    servers:
+      - address: "http://order-service-1:8082"
+      - address: "http://order-service-2:8082"
+  - name: "product-service"
     balancer_type: "weighted_round_robin"
     servers:
-      - address: "grpc://192.168.1.100:8081"
-        weight: 2
-      - address: "grpc://192.168.1.101:8081"
+      - address: "http://product-service-1:8083"
+        weight: 3
+      - address: "http://product-service-2:8083"
         weight: 1
 health_check:
   enabled: true
   interval: 5s
   timeout: 2s
-  path: "grpc.health.v1.Health/Check"
-  protocol: "grpc"
+  path: "/health"
 routes:
-  - name: "grpc-route"
+  - name: "user-route"
     match:
-      path: "/**"
-    service: "grpc-service"
+      path: "/api/users/**"
+    service: "user-service"
+  - name: "order-route"
+    match:
+      path: "/api/orders/**"
+    service: "order-service"
+  - name: "product-route"
+    match:
+      path: "/api/products/**"
+    service: "product-service"
 ```
 
-After starting Nexus, all gRPC requests sent to `localhost:8080` will be weighted round-robin load balanced to the backend gRPC servers. Nexus will use the gRPC health check service (`grpc.health.v1.Health/Check`) to check the health status of the backend servers.
+After starting Nexus, requests will be routed to different microservices based on the path:
+1. All requests starting with `/api/users/` will be routed to `user-service` using the least connections load balancing algorithm
+2. All requests starting with `/api/orders/` will be routed to `order-service` using the round-robin load balancing algorithm
+3. All requests starting with `/api/products/` will be routed to `product-service` using the weighted round-robin load balancing algorithm
+
+This configuration makes Nexus an effective API gateway, distributing requests to the appropriate microservices while providing health checking and load balancing capabilities.
 
 ## Contributing
 

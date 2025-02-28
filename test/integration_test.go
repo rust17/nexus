@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -155,6 +156,93 @@ func TestIntegration(t *testing.T) {
 				if got != expected {
 					t.Errorf("Test case %s, iteration %d failed: expected %q, got %q", tc.name, i, expected, got)
 				}
+			}
+		})
+	}
+}
+
+func TestHTTPReverseProxy(t *testing.T) {
+	backend1URL, backend2URL, cleanup := setupTestBackends()
+	defer cleanup()
+
+	inputConfig := fmt.Sprintf(`
+listen_addr: ":8080"
+services:
+  - name: "test-service1"
+    servers:
+      - address: %s
+  - name: "test-service2"
+    servers:
+      - address: %s
+routes:
+  - name: "api-route"
+    match:
+      path: "*"
+      host: "api.example1.com"
+    service: "test-service1"
+  - name: "api-route2"
+    match:
+      path: "*"
+      host: "api.example2.com"
+    service: "test-service2"
+`, backend1URL, backend2URL)
+	cfgFile := config.CreateTempConfigFile(t, inputConfig)
+	defer os.Remove(cfgFile)
+
+	cfg := config.NewConfig()
+	cfg.LoadFromFile(cfgFile)
+
+	router := route.NewRouter(cfg.Routes, cfg.Services)
+	proxy := px.NewProxy(router)
+
+	ts := httptest.NewServer(proxy)
+	defer ts.Close()
+
+	testCases := []struct {
+		name     string
+		host     string
+		expected string
+		path     string
+	}{
+		{
+			name:     "api.example1.com root path",
+			host:     "api.example1.com",
+			expected: "Response from backend 1",
+			path:     "/api",
+		},
+		{
+			name:     "api.example1.com test path",
+			host:     "api.example1.com",
+			expected: "Response from backend 1",
+			path:     "/foobar",
+		},
+		{
+			name:     "api.example2.com root path",
+			host:     "api.example2.com",
+			expected: "Response from backend 2",
+			path:     "/api",
+		},
+		{
+			name:     "api.example2.com test path",
+			host:     "api.example2.com",
+			expected: "Response from backend 2",
+			path:     "/barfoo",
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", tc.path, nil).WithContext(ctx)
+			req.Host = tc.host
+			w := httptest.NewRecorder()
+			proxy.ServeHTTP(w, req)
+
+			got := w.Body.String()
+			if got != tc.expected {
+				t.Errorf("Test case %s failed: expected %q, got %q", tc.name, tc.expected, got)
 			}
 		})
 	}

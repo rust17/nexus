@@ -16,8 +16,10 @@ services:
 
 # Health check configuration
 health_check:
+  enabled: true           # enable health check
   interval: 10s  # Check interval
   timeout: 2s    # Timeout duration
+  path: "/health"         # health check path (HTTP)
 
 # Log level (debug, info, warn, error, fatal)
 log_level: "info"

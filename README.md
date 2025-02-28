@@ -58,33 +58,24 @@ graph LR
 ## Features
 
 * **High Performance**: Built using Go and efficient network programming techniques, delivering excellent performance and low latency.
-* **Load Balancing**: Supports multiple load balancing algorithms (e.g., round-robin, weighted round-robin, IP hash) to intelligently distribute requests based on backend server health and load conditions.
+* **Load Balancing**: Supports multiple load balancing algorithms (e.g., round-robin, weighted round-robin, least connections) to intelligently distribute requests based on backend server health and load conditions.
 * **Health Checking**: Built-in health check mechanism that regularly monitors backend server availability, automatically removes unhealthy servers to ensure service stability and reliability.
 * **Flexible Configuration**: Uses YAML configuration files for management, easy to configure and maintain. Supports dynamic configuration updates without service restart.
 * **Extensibility**: Modular design, easy to extend and customize. New functional modules can be added as needed, such as authentication, rate limiting, monitoring, etc.
 * **Easy Deployment**: Compiles into a single executable file for simple deployment. Supports Docker deployment.
-* **gRPC Support**: Supports reverse proxy and load balancing for gRPC protocol.
-
-## Prerequisites
-
-* Go 1.16 or higher
-* Protocol Buffer compiler (protoc)
-* protoc-gen-go and protoc-gen-go-grpc plugins (for gRPC support)
 
 ## Quick Start
 
 ### Prerequisites
 
-* Go 1.16 or higher
-* Protocol Buffer compiler (protoc)
-* protoc-gen-go and protoc-gen-go-grpc plugins (for gRPC support)
+* Go 1.22.5 or higher
 
 ### Installation
 
 1. **Clone Repository:**
 
     ```bash
-    git clone https://github.com/yourusername/nexus.git
+    git clone https://github.com/rust17/nexus.git
     cd nexus
     ```
 
@@ -113,19 +104,18 @@ graph LR
     ```yaml
     # config.yaml example
 
-    proxy:
-      listen_address: ":8080"  # listening address
-      backend_servers:        # backend server list
-        - address: "192.168.1.100:8081"
-          weight: 10
-        - address: "192.168.1.101:8081"
-          weight: 5
-      load_balancer: "round_robin" # load balancing algorithm, options: round_robin, weighted_round_robin, ip_hash
-      health_check:
-        enabled: true           # enable health check
-        interval: "5s"          # health check interval
-        timeout: "2s"           # health check timeout
-        path: "/health"         # health check path (HTTP) or gRPC service method name (gRPC)
+    listen_address: ":8080"  # listening address
+    services:
+      - name: "api-service"
+        balancer_type: "round_robin"
+        servers:
+          - address: "http://localhost:8081"
+          - address: "http://localhost:8082"
+    routes:
+      - name: user_route
+        match:
+          path: "/api/v1/users/**"  # Path wildcard
+        service: api-service      # Associated backend service
     ```
 
 ### Running
@@ -151,30 +141,50 @@ graph LR
 The `config.yaml` file is used to configure the behavior of the Nexus reverse proxy and load balancer. Here's a detailed explanation of the configuration file:
 
 ```yaml
-proxy:
-  listen_address: ":8080" # (required) listening address, e.g., ":8080", "0.0.0.0:80", "[::]:8080"
-  backend_servers: # (required) backend server list
-    - address: "192.168.1.100:8081" # backend server address, format: "host:port"
-      weight: 10 # (optional) weight, used for weighted round-robin load balancing, default: 1
-    - address: "192.168.1.101:8081"
-      weight: 5
-  load_balancer: "round_robin" # (optional) load balancing algorithm, options:
-# - "round_robin": round-robin (default)
-# - "weighted_round_robin": weighted round-robin
-# - "ip_hash": IP Hash
-health_check: # (optional) health check configuration
-enabled: true # enable health check, default: false
-interval: "5s" # health check interval, e.g., "5s", "1m", "300ms", default: "5s"
-timeout: "2s" # health check timeout, e.g., "2s", "1s", "500ms", default: "2s"
-path: "/health" # health check path (HTTP) or gRPC service method name (gRPC), default: "/health"
-# - HTTP health check: Nexus will send an HTTP GET request to the /health path of the backend server.
-# - gRPC health check: Nexus will call the Check method of the gRPC health check service, with the method name specified by the path.
-protocol: "http" # health check protocol, options: "http", "grpc", default: "http"
-logger: # (optional) logger configuration
-level: "info" # log level, options: "debug", "info", "warn", "error", "fatal", default: "info"
-format: "text" # log format, options: "text", "json", default: "text"
-output: "stdout" # log output destination, options: "stdout", "stderr", "file", default: "stdout"
-filename: "nexus.log" # when output is "file", specify the log file path, default: "nexus.log" (only effective when output is "file")
+# Proxy server listening address
+listen_addr: ":8080"
+
+# Log level (debug, info, warn, error, fatal)
+log_level: "info"
+
+# Service configuration
+services:
+  - name: "api-service"                    # Service name (required)
+    balancer_type: "weighted_round_robin"  # Load balancer algorithm (round_robin, least_connections, weighted_round_robin)
+    servers:                               # List of backend servers
+      - address: "http://localhost:8081"   # Server address (required)
+        weight: 3                          # Server weight for weighted algorithms (optional, default: 1)
+      - address: "http://localhost:8082"
+        weight: 2
+      - address: "http://localhost:8083"
+        weight: 1
+
+# Health check configuration
+health_check:
+  enabled: true           # Enable health check
+  interval: 10s           # Check interval
+  timeout: 2s             # Timeout duration
+  path: "/health"         # Health check path (HTTP)
+
+# Telemetry configuration
+telemetry:
+  opentelemetry:
+    enabled: false                # Enable OpenTelemetry
+    endpoint: "otel-collector:4317"  # OpenTelemetry collector endpoint
+    service_name: "nexus-lb"      # Service name for telemetry
+    metrics:
+      interval: "60s"             # Metrics collection interval
+
+# Route configuration
+routes:
+  - name: user_route              # Route name
+    match:                        # Route matching criteria
+      path: "/api/v1/users/**"    # Path pattern with wildcard support
+      headers:                    # Header matching (optional)
+        X-Service-Group: "v2"
+      method: "GET"               # HTTP method matching (optional)
+      host: "api.example.com"     # Host header matching (optional)
+    service: api-service          # Target service name
 ```
 
 ## Directory Structure
@@ -182,34 +192,33 @@ filename: "nexus.log" # when output is "file", specify the log file path, defaul
 ```
 nexus/
 ├── .gitignore
+├── api/                    # API definitions and interfaces
 ├── cmd/                    # contains executable files for the project
 │   └── main.go             # main program entry
 ├── configs/
 │   └── config.yaml         # configuration file for configuring the proxy server
-├── internal/
+├── internal/               # internal packages not meant for external use
 │   ├── balancer/
-│   │   ├── balancer.go     # load balancer implementation
-│   │   └── weighted_round_robin.go # weighted round-robin load balancer implementation
-│   │   └── round_robin.go # round-robin load balancer implementation
+│   │   ├── balancer.go     # load balancer interface
+│   │   ├── weighted_round_robin.go # weighted round-robin load balancer implementation
+│   │   ├── round_robin.go  # round-robin load balancer implementation
 │   │   └── least_connections.go # least connections load balancer implementation
-│   ├── config.go           # configuration management
-│   ├── healthcheck.go      # health check implementation
-│   ├── logger.go           # logger implementation
-│   └── proxy.go            # proxy implementation
+│   ├── config/             # configuration management
+│   ├── health/             # health check implementation
+│   ├── logger/             # logger implementation
+│   ├── proxy/              # proxy implementation
+│   └── router/             # request routing implementation
 ├── pb/                     # contains protobuf definitions and generated code
 │   ├── nexus.pb.go
 │   └── nexus_grpc.pb.go
-├── test/
-│   ├── balancer_test.go    # load balancer tests
+├── scripts/                # utility scripts for development, testing, and deployment
+├── test/                   # test files
 │   ├── benchmark_test.go   # performance benchmark tests
-│   ├── config_test.go      # configuration loading tests
-│   ├── healthcheck_test.go # health check tests
 │   ├── integration_test.go # integration tests
-│   ├── logger_test.go      # logging tests
-│   ├── proxy_test.go       # reverse proxy tests
 │   └── stress_test.go      # stress tests
-├── go.mod
-└── go.sum
+├── web/                    # web interface assets and code
+├── go.mod                  # Go module definition
+└── go.sum                  # Go module dependency checksums
 ```
 
 ## Usage Examples
@@ -218,34 +227,89 @@ nexus/
 
 Configure the `config.yaml` file as follows:
 ```yml
-proxy:
-  listen_address: ":8080"
-  backend_servers:
-    - address: "192.168.1.100:8081"
-    - address: "192.168.1.101:8081"
-  load_balancer: "round_robin"
-  health_check:
-    enabled: true
-path: "/health"
-protocol: "http"
+listen_addr: ":8080"
+services:
+  - name: "api-service"
+    balancer_type: "round_robin"
+    servers:
+      - address: "http://192.168.1.100:8081"
+      - address: "http://192.168.1.101:8081"
+health_check:
+  enabled: true
+  interval: 10s
+  timeout: 2s
+  path: "/health"
+  protocol: "http"
+routes:
+  - name: "api-route"
+    match:
+      path: "/**"
+    service: "api-service"
 ```
 
 After starting Nexus, all HTTP requests sent to `http://localhost:8080` will be round-robin load balanced to the backend servers `192.168.1.100:8081` and `192.168.1.101:8081`. Nexus will periodically check the `/health` path of the backend servers to ensure that only requests are sent to healthy servers.
+
+### Route Configuration with Traffic Splitting
+
+Configure the `config.yaml` file as follows:
+```yaml
+listen_addr: ":8080"
+services:
+  - name: "api-v1"
+    balancer_type: "round_robin"
+    servers:
+      - address: "http://api-v1-1:8081"
+      - address: "http://api-v1-2:8081"
+  - name: "api-v2"
+    balancer_type: "round_robin"
+    servers:
+      - address: "http://api-v2-1:8082"
+      - address: "http://api-v2-2:8082"
+routes:
+  - name: "api-canary"
+    match:
+      path: "/api/**"
+      headers:
+        X-Debug: "true"
+    split:
+      - service: "api-v1"
+        weight: 80
+      - service: "api-v2"
+        weight: 20
+  - name: "api-stable"
+    match:
+      path: "/api/**"
+    service: "api-v1"
+```
+
+This configuration demonstrates a canary deployment setup where:
+1. Requests with the header `X-Debug: true` will be split between api-v1 (80%) and api-v2 (20%)
+2. All other API requests will be routed to api-v1 only
 
 ### gRPC Reverse Proxy and Load Balancing
 
 Configure the `config.yaml` file as follows:
 ```yaml
-proxy:
-  listen_address: ":8080"
-  backend_servers:
-    - address: "192.168.1.100:8081"
-    - address: "192.168.1.101:8081"
-  load_balancer: "weighted_round_robin"
-  health_check:
-    enabled: true
-path: "grpc.health.v1.Health/Check" # gRPC health check service method name
-protocol: "grpc"
+listen_addr: ":8080"
+services:
+  - name: "grpc-service"
+    balancer_type: "weighted_round_robin"
+    servers:
+      - address: "grpc://192.168.1.100:8081"
+        weight: 2
+      - address: "grpc://192.168.1.101:8081"
+        weight: 1
+health_check:
+  enabled: true
+  interval: 5s
+  timeout: 2s
+  path: "grpc.health.v1.Health/Check"
+  protocol: "grpc"
+routes:
+  - name: "grpc-route"
+    match:
+      path: "/**"
+    service: "grpc-service"
 ```
 
 After starting Nexus, all gRPC requests sent to `localhost:8080` will be weighted round-robin load balanced to the backend gRPC servers. Nexus will use the gRPC health check service (`grpc.health.v1.Health/Check`) to check the health status of the backend servers.

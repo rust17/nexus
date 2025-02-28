@@ -160,3 +160,203 @@ func BenchmarkRouter_Match(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkSplitRouting(b *testing.B) {
+	// Create different split scenarios
+	splitScenarios := []struct {
+		name        string
+		splitCount  int    // Split service count
+		equalWeight bool   // Whether the weight is equal
+		path        string // Path pattern
+	}{
+		{
+			name:        "TwoServices_EqualWeight",
+			splitCount:  2,
+			equalWeight: true,
+			path:        "/api/two-equal",
+		},
+		{
+			name:        "TwoServices_UnequalWeight",
+			splitCount:  2,
+			equalWeight: false,
+			path:        "/api/two-unequal",
+		},
+		{
+			name:        "FiveServices_EqualWeight",
+			splitCount:  5,
+			equalWeight: true,
+			path:        "/api/five-equal",
+		},
+		{
+			name:        "FiveServices_UnequalWeight",
+			splitCount:  5,
+			equalWeight: false,
+			path:        "/api/five-unequal",
+		},
+		{
+			name:        "TenServices_EqualWeight",
+			splitCount:  10,
+			equalWeight: true,
+			path:        "/api/ten-equal",
+		},
+		{
+			name:        "TenServices_UnequalWeight",
+			splitCount:  10,
+			equalWeight: false,
+			path:        "/api/ten-unequal",
+		},
+		{
+			name:        "TwentyServices_EqualWeight",
+			splitCount:  20,
+			equalWeight: true,
+			path:        "/api/twenty-equal",
+		},
+		{
+			name:        "TwentyServices_UnequalWeight",
+			splitCount:  20,
+			equalWeight: false,
+			path:        "/api/twenty-unequal",
+		},
+		{
+			name:        "FiftyServices_EqualWeight",
+			splitCount:  50,
+			equalWeight: true,
+			path:        "/api/fifty-equal",
+		},
+		{
+			name:        "FiftyServices_UnequalWeight",
+			splitCount:  50,
+			equalWeight: false,
+			path:        "/api/fifty-unequal",
+		},
+		{
+			name:        "HundredServices_EqualWeight",
+			splitCount:  100,
+			equalWeight: true,
+			path:        "/api/hundred-equal",
+		},
+		{
+			name:        "HundredServices_UnequalWeight",
+			splitCount:  100,
+			equalWeight: false,
+			path:        "/api/hundred-unequal",
+		},
+	}
+
+	routes := []*config.RouteConfig{}
+	services := map[string]*config.ServiceConfig{}
+
+	// Create route configurations for each split scenario
+	for _, scenario := range splitScenarios {
+		// Create service and split configurations
+		splits := make([]*config.RouteSplit, scenario.splitCount)
+
+		for i := 0; i < scenario.splitCount; i++ {
+			serviceName := scenario.name + "_service_" + string(rune('A'+i))
+
+			// Set weight for service
+			weight := 100 / scenario.splitCount // Equal weight
+			if !scenario.equalWeight {
+				// Non-equal weight, use decreasing weight
+				weight = 100 - i*2
+				if weight <= 0 {
+					weight = 1 // Ensure at least 1 weight
+				}
+			}
+
+			// Add service configuration
+			services[serviceName] = &config.ServiceConfig{
+				Name:         serviceName,
+				BalancerType: "round_robin",
+			}
+
+			// Add split configuration
+			splits[i] = &config.RouteSplit{
+				Service: serviceName,
+				Weight:  weight,
+			}
+		}
+
+		// Create route configuration
+		routes = append(routes, &config.RouteConfig{
+			Name: scenario.name,
+			Match: config.RouteMatch{
+				Path: scenario.path,
+			},
+			Split: splits,
+		})
+	}
+
+	// Create router
+	router := NewRouter(routes, services)
+
+	// Run benchmark test
+	for _, scenario := range splitScenarios {
+		b.Run(scenario.name, func(b *testing.B) {
+			// Create matching request
+			req := httptest.NewRequest("GET", scenario.path, nil)
+
+			// Reset timer
+			b.ResetTimer()
+
+			// Perform matching operation
+			for i := 0; i < b.N; i++ {
+				svc := router.Match(req)
+				if svc == nil {
+					b.Fatalf("Route matching failed: %s", scenario.path)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkSelectServiceBySplit(b *testing.B) {
+	// Create a router instance for accessing its private method
+	r := &router{}
+
+	// Create different split scenarios for testing
+	scenarios := []struct {
+		name       string
+		splitCount int
+	}{
+		{"TwoSplits", 2},
+		{"FiveSplits", 5},
+		{"TenSplits", 10},
+		{"TwentySplits", 20},
+		{"FiftySplits", 50},
+		{"HundredSplits", 100},
+		{"ThousandSplits", 1000},
+	}
+
+	for _, scenario := range scenarios {
+		b.Run(scenario.name, func(b *testing.B) {
+			// Create a routeInfo with the specified number of split targets
+			routeInfo := &routeInfo{
+				split: make([]*config.RouteSplit, scenario.splitCount),
+			}
+
+			// Set service weight (use equal weight for simplicity)
+			for i := 0; i < scenario.splitCount; i++ {
+				routeInfo.split[i] = &config.RouteSplit{
+					Service: "service_" + string(rune('A'+i%26)),
+					Weight:  100 / scenario.splitCount,
+				}
+			}
+
+			// Ensure at least 1 weight
+			if routeInfo.split[0].Weight == 0 {
+				for i := 0; i < scenario.splitCount; i++ {
+					routeInfo.split[i].Weight = 1
+				}
+			}
+
+			// Reset timer
+			b.ResetTimer()
+
+			// Perform service selection operation
+			for i := 0; i < b.N; i++ {
+				_ = r.selectServiceBySplit(routeInfo)
+			}
+		})
+	}
+}

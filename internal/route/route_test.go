@@ -1,7 +1,9 @@
 package route
 
 import (
+	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"nexus/internal/config"
@@ -360,6 +362,115 @@ func TestRouter_Update(t *testing.T) {
 		req := httptest.NewRequest("PATCH", "/partial", nil)
 		if svc := rt.Match(req); svc == nil || svc.Name() != "service_c" {
 			t.Errorf("Partial update failed to apply new route")
+		}
+	})
+}
+
+func TestRouteSplit(t *testing.T) {
+	// 创建一个匹配该路由的请求
+	req := &http.Request{
+		Method: "GET",
+		URL: &url.URL{
+			Path: "/api/users",
+		},
+		Host:   "example.com",
+		Header: http.Header{},
+	}
+
+	t.Run("TestRouteSplit", func(t *testing.T) {
+		route := NewRouter([]*config.RouteConfig{
+			{
+				Name: "split-route",
+				Match: config.RouteMatch{
+					Path: "/api/**",
+				},
+				Split: []*config.RouteSplit{
+					{Service: "service-a", Weight: 80},
+					{Service: "service-b", Weight: 20},
+				},
+			},
+		}, map[string]*config.ServiceConfig{
+			"service-a": {Name: "service-a", BalancerType: "round_robin"},
+			"service-b": {Name: "service-b", BalancerType: "round_robin"},
+		})
+
+		// 统计服务选择结果
+		serviceCount := make(map[string]int)
+		iterations := 1000
+
+		for i := 0; i < iterations; i++ {
+			service := route.Match(req)
+			if service == nil {
+				t.Fatalf("Request should match route")
+			}
+			serviceCount[service.Name()]++
+		}
+
+		// 检查分流比例是否接近预期
+		// 允许有10%的误差
+		expectedServiceA := float64(iterations) * 0.8
+		expectedServiceB := float64(iterations) * 0.2
+		tolerance := float64(iterations) * 0.1
+
+		if count := float64(serviceCount["service-a"]); count < expectedServiceA-tolerance || count > expectedServiceA+tolerance {
+			t.Errorf("service-a was selected %d times, expected around %f (±%f)", serviceCount["service-a"], expectedServiceA, tolerance)
+		}
+
+		if count := float64(serviceCount["service-b"]); count < expectedServiceB-tolerance || count > expectedServiceB+tolerance {
+			t.Errorf("service-b was selected %d times, expected around %f (±%f)", serviceCount["service-b"], expectedServiceB, tolerance)
+		}
+	})
+
+	t.Run("TestSingleSplit", func(t *testing.T) {
+		route := NewRouter([]*config.RouteConfig{
+			{
+				Name: "single-split-route",
+				Match: config.RouteMatch{
+					Path: "/api/**",
+				},
+				Split: []*config.RouteSplit{
+					{Service: "service-a", Weight: 100},
+				},
+			},
+		}, map[string]*config.ServiceConfig{
+			"service-a": {Name: "service-a", BalancerType: "round_robin"},
+		})
+
+		service := route.Match(req)
+		if service == nil {
+			t.Fatalf("Request should match route")
+		}
+
+		if service.Name() != "service-a" {
+			t.Errorf("Expected service-a, got %s", service.Name())
+		}
+	})
+
+	t.Run("TestZeroWeightSplit", func(t *testing.T) {
+		route := NewRouter([]*config.RouteConfig{
+			{
+				Name: "zero-weight-split-route",
+				Match: config.RouteMatch{
+					Path: "/api/**",
+				},
+				Split: []*config.RouteSplit{
+					{Service: "service-a", Weight: 0},
+					{Service: "service-b", Weight: 0},
+				},
+			},
+		}, map[string]*config.ServiceConfig{
+			"service-a": {Name: "service-a", BalancerType: "round_robin"},
+			"service-b": {Name: "service-b", BalancerType: "round_robin"},
+		})
+
+		service := route.Match(req)
+		if service == nil {
+			t.Fatalf("Request should match route")
+		}
+
+		// 当所有权重为0时，应该选择第一个服务
+		if service.Name() != "service-a" {
+			t.Errorf("Expected service-a, got %s", service.Name())
 		}
 	})
 }

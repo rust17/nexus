@@ -1,11 +1,18 @@
 package route
 
 import (
+	"math/rand"
 	"net/http"
 	"sync"
+	"time"
 
 	"nexus/internal/config"
 	"nexus/internal/service"
+)
+
+var (
+	// 为分流功能创建一个全局随机数生成器
+	rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 )
 
 // Router is responsible for matching requests to the corresponding service
@@ -45,6 +52,12 @@ func (r *router) Match(req *http.Request) service.Service {
 	if routeInfo == nil {
 		return nil
 	}
+
+	if len(routeInfo.split) > 0 {
+		// Handle split routing based on weights
+		return r.services[r.selectServiceBySplit(routeInfo)]
+	}
+
 	return r.services[routeInfo.service]
 }
 
@@ -88,8 +101,43 @@ func buildTree(routes []*config.RouteConfig) *node {
 			host:    route.Match.Host,
 			headers: route.Match.Headers,
 			service: route.Service,
+			split:   route.Split,
 		})
 	}
 
 	return tree
+}
+
+// selectServiceBySplit selects a service based on the configured weights
+func (r *router) selectServiceBySplit(routeInfo *routeInfo) string {
+	// If there's only one split entry, return it directly
+	if len(routeInfo.split) == 1 {
+		return routeInfo.split[0].Service
+	}
+
+	// Calculate total weight
+	totalWeight := 0
+	for _, split := range routeInfo.split {
+		totalWeight += split.Weight
+	}
+
+	// If total weight is 0, return the first service (should not happen)
+	if totalWeight == 0 {
+		return routeInfo.split[0].Service
+	}
+
+	// Generate a random number between 0 and totalWeight
+	randomWeight := rng.Intn(totalWeight)
+
+	// Select service based on weight
+	currentWeight := 0
+	for _, split := range routeInfo.split {
+		currentWeight += split.Weight
+		if randomWeight < currentWeight {
+			return split.Service
+		}
+	}
+
+	// Fallback to the first service (should not happen)
+	return routeInfo.split[0].Service
 }

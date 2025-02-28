@@ -2,6 +2,7 @@ package route
 
 import (
 	"net/http"
+	"nexus/internal/config"
 	"regexp"
 	"strings"
 )
@@ -21,6 +22,7 @@ type routeInfo struct {
 	headers map[string]string
 	service string
 	path    string
+	split   []*config.RouteSplit
 }
 
 func newNode() *node {

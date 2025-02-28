@@ -283,7 +283,7 @@ routes:
 ```
 
 This configuration demonstrates a canary deployment setup where:
-1. Requests with the header `X-Debug: true` will be split between api-v1 (80%) and api-v2 (20%)
+1. Requests with the header `X-Debug: true` will be split between api-v1 (approximately 80%) and api-v2 (approximately 20%)
 2. All other API requests will be routed to api-v1 only
 
 ### gRPC Reverse Proxy and Load Balancing

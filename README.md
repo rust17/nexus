@@ -114,7 +114,7 @@ graph LR
     routes:
       - name: user_route
         match:
-          path: "/api/v1/users/**"  # Path wildcard
+          path: "/api/v1/users/*"  # Path wildcard
         service: api-service      # Associated backend service
     ```
 
@@ -179,7 +179,7 @@ telemetry:
 routes:
   - name: user_route              # Route name
     match:                        # Route matching criteria
-      path: "/api/v1/users/**"    # Path pattern with wildcard support
+      path: "/api/v1/users/*"    # Path pattern with wildcard support
       headers:                    # Header matching (optional)
         X-Service-Group: "v2"
       method: "GET"               # HTTP method matching (optional)
@@ -261,7 +261,7 @@ services:
 routes:
   - name: "api-canary"
     match:
-      path: "/api/**"
+      path: "/api/*"
       headers:
         X-Debug: "true"
     split:
@@ -271,7 +271,7 @@ routes:
         weight: 20
   - name: "api-stable"
     match:
-      path: "/api/**"
+      path: "/api/*"
     service: "api-v1"
 ```
 
@@ -310,15 +310,15 @@ health_check:
 routes:
   - name: "user-route"
     match:
-      path: "/api/users/**"
+      path: "/api/users/*"
     service: "user-service"
   - name: "order-route"
     match:
-      path: "/api/orders/**"
+      path: "/api/orders/*"
     service: "order-service"
   - name: "product-route"
     match:
-      path: "/api/products/**"
+      path: "/api/products/*"
     service: "product-service"
 ```
 

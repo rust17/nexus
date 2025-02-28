@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"nexus/internal/config"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRouter_Match(t *testing.T) {
@@ -227,6 +229,79 @@ func TestRouter_Match(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("wildcard match", func(t *testing.T) {
+		router := NewRouter([]*config.RouteConfig{
+			{
+				Name:    "api wildcard handler",
+				Service: "api wildcard handler",
+				Match: config.RouteMatch{
+					Path: "/api/*",
+				},
+			},
+			{
+				Name:    "api multi wildcard handler",
+				Service: "api multi wildcard handler",
+				Match: config.RouteMatch{
+					Path: "/api/products/categories/*",
+				},
+			},
+		}, map[string]*config.ServiceConfig{
+			"api wildcard handler":       {Name: "api wildcard handler", BalancerType: "round_robin"},
+			"api multi wildcard handler": {Name: "api multi wildcard handler", BalancerType: "round_robin"},
+		})
+
+		service := router.Match(httptest.NewRequest(http.MethodGet, "/api/users", nil))
+		assert.Equal(t, "api wildcard handler", service.Name())
+
+		service = router.Match(httptest.NewRequest(http.MethodGet, "/api/users/123", nil))
+		assert.Equal(t, "api wildcard handler", service.Name())
+
+		service = router.Match(httptest.NewRequest(http.MethodGet, "/api/products/categories/food", nil))
+		assert.Equal(t, "api multi wildcard handler", service.Name())
+
+		// Should not match paths that do not start with /api/
+		service = router.Match(httptest.NewRequest(http.MethodGet, "/other/path", nil))
+		assert.Nil(t, service)
+
+		// Exact match should take precedence over wildcard match
+		// Note: The Update method will completely replace the route configuration, so we need to include both the original wildcard routes and the new exact match routes
+		router.Update([]*config.RouteConfig{
+			{
+				Name:    "api wildcard handler",
+				Service: "api wildcard handler",
+				Match: config.RouteMatch{
+					Path: "/api/*",
+				},
+			},
+			{
+				Name:    "api products wildcard handler",
+				Service: "api products wildcard handler",
+				Match: config.RouteMatch{
+					Path: "/api/products/*",
+				},
+			},
+			{
+				Name:    "specific handler",
+				Service: "specific handler",
+				Match:   config.RouteMatch{Path: "/api/users"},
+			},
+		}, map[string]*config.ServiceConfig{
+			"api wildcard handler":          {Name: "api wildcard handler", BalancerType: "round_robin"},
+			"api products wildcard handler": {Name: "api products wildcard handler", BalancerType: "round_robin"},
+			"specific handler":              {Name: "specific handler", BalancerType: "round_robin"},
+		})
+		service = router.Match(httptest.NewRequest(http.MethodGet, "/api/users", nil))
+		assert.Equal(t, "specific handler", service.Name())
+
+		// Other wildcard paths should still match
+		service = router.Match(httptest.NewRequest(http.MethodGet, "/api/products", nil))
+		assert.Equal(t, "api wildcard handler", service.Name())
+
+		// Multi-layer wildcard paths should match
+		service = router.Match(httptest.NewRequest(http.MethodGet, "/api/products/categories", nil))
+		assert.Equal(t, "api products wildcard handler", service.Name())
+	})
 }
 
 func TestRouter_Update(t *testing.T) {
@@ -382,7 +457,7 @@ func TestRouteSplit(t *testing.T) {
 			{
 				Name: "split-route",
 				Match: config.RouteMatch{
-					Path: "/api/**",
+					Path: "/api/*",
 				},
 				Split: []*config.RouteSplit{
 					{Service: "service-a", Weight: 80},
@@ -426,7 +501,7 @@ func TestRouteSplit(t *testing.T) {
 			{
 				Name: "single-split-route",
 				Match: config.RouteMatch{
-					Path: "/api/**",
+					Path: "/api/*",
 				},
 				Split: []*config.RouteSplit{
 					{Service: "service-a", Weight: 100},
@@ -451,7 +526,7 @@ func TestRouteSplit(t *testing.T) {
 			{
 				Name: "zero-weight-split-route",
 				Match: config.RouteMatch{
-					Path: "/api/**",
+					Path: "/api/*",
 				},
 				Split: []*config.RouteSplit{
 					{Service: "service-a", Weight: 0},

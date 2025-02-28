@@ -52,7 +52,7 @@ func (n *node) insert(pattern string, route *routeInfo) {
 	for i, part := range parts {
 		matched := false
 		for _, child := range current.children {
-			if child.part == part || child.isWild {
+			if child.part == part {
 				current = child
 				matched = true
 				break
@@ -61,7 +61,7 @@ func (n *node) insert(pattern string, route *routeInfo) {
 		if !matched {
 			child := newNode()
 			child.part = part
-			child.isWild = len(part) > 0 && (part[0] == ':' || part[0] == '*')
+			child.isWild = part == "*" || part == "**"
 			current.children = append(current.children, child)
 			current = child
 		}
@@ -88,27 +88,93 @@ func (n *node) search(req *http.Request) *routeInfo {
 		return nil
 	}
 
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	return n.searchParts(parts, 0, req)
-}
-
-func (n *node) searchParts(parts []string, height int, req *http.Request) *routeInfo {
-	if len(parts) == height || strings.HasPrefix(n.part, "*") {
-		if n.isEnd {
-			return n.findMatchingRoute(req)
-		}
-		return nil
+	// First try exact match
+	if exactMatch := n.searchExactPath(path, req); exactMatch != nil {
+		return exactMatch
 	}
 
-	part := parts[height]
-	for _, child := range n.children {
-		if child.part == part || child.isWild {
-			if result := child.searchParts(parts, height+1, req); result != nil {
-				return result
+	// Then try wildcard match
+	return n.searchWildcardPath(path)
+}
+
+// searchExactPath Try exact match path
+func (n *node) searchExactPath(path string, req *http.Request) *routeInfo {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	current := n
+
+	for _, part := range parts {
+		found := false
+		for _, child := range current.children {
+			if !child.isWild && child.part == part {
+				current = child
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil
+		}
+	}
+
+	if current.isEnd {
+		return current.findMatchingRoute(req)
+	}
+
+	return nil
+}
+
+// searchWildcardPath Try wildcard match path
+func (n *node) searchWildcardPath(path string) *routeInfo {
+	// Get all possible wildcard routes
+	wildcardRoutes := make([]*routeInfo, 0)
+
+	// Recursively collect all wildcard routes
+	n.collectWildcardRoutes("", &wildcardRoutes)
+
+	// Sort by path length, select the longest match
+	var bestMatch *routeInfo
+	var bestMatchLength int
+
+	for _, info := range wildcardRoutes {
+		routePath := info.path
+
+		// Check if it is a wildcard path
+		if strings.HasSuffix(routePath, "/*") {
+			prefix := strings.TrimSuffix(routePath, "/*")
+			if strings.HasPrefix(path, prefix+"/") {
+				// Calculate prefix length
+				prefixParts := strings.Split(strings.Trim(prefix, "/"), "/")
+				if len(prefixParts) > bestMatchLength {
+					bestMatchLength = len(prefixParts)
+					bestMatch = info
+				}
 			}
 		}
 	}
+
+	if bestMatch != nil {
+		return bestMatch
+	}
+
 	return nil
+}
+
+// collectWildcardRoutes Collect all wildcard routes
+func (n *node) collectWildcardRoutes(currentPath string, routes *[]*routeInfo) {
+	if n.isWild && n.isEnd {
+		for _, info := range n.routeInfos {
+			*routes = append(*routes, info)
+		}
+	}
+
+	for _, child := range n.children {
+		newPath := currentPath
+		if newPath != "" {
+			newPath += "/"
+		}
+		newPath += child.part
+		child.collectWildcardRoutes(newPath, routes)
+	}
 }
 
 // findMatchingRoute Find matching route information

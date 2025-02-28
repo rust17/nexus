@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -21,17 +22,21 @@ import (
 )
 
 func main() {
+	// Define command line arguments
+	configPath := flag.String("config", "configs/config.yaml", "config file path")
+	flag.Parse()
+
 	// Load configuration
 	cfg := config.NewConfig()
-	if err := config.Validate("configs/config.yaml"); err != nil {
+	if err := config.Validate(*configPath); err != nil {
 		log.Fatalf("config error - %v", err)
 	}
-	if err := cfg.LoadFromFile("configs/config.yaml"); err != nil {
+	if err := cfg.LoadFromFile(*configPath); err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
 	// Initialize configuration watcher
-	configWatcher := config.NewConfigWatcher("configs/config.yaml")
+	configWatcher := config.NewConfigWatcher(*configPath)
 
 	// Initialize logger (using singleton mode)
 	logger := lg.GetInstance()

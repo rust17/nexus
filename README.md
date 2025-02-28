@@ -1,6 +1,6 @@
 # Nexus - High-Performance Reverse Proxy and Load Balancer
 
-**Nexus** is a lightweight, high-performance reverse proxy and load balancer written in Go. It aims to provide a fast, reliable, and scalable solution for managing and routing network traffic.
+**Nexus** is a lightweight, high-performance reverse proxy and load balancer built in Go, designed to deliver fast, reliable, and scalable traffic management solutions.
 
 ```mermaid
 graph LR
@@ -55,68 +55,52 @@ graph LR
     class NexusProxy,Router,HealthChecker,Service1,Service2,ServiceN,LoadBalancer1,LoadBalancer2,LoadBalancerN,BackendServer1,BackendServer2,BackendServer3,BackendServer4,BackendServer5,BackendServer6,BackendServer7,BackendServer8,BackendServer9,BackendServerN component
 ```
 
-## Features
+## Key Features
 
-* **High Performance**: Built using Go and efficient network programming techniques, delivering excellent performance and low latency.
-* **Load Balancing**: Supports multiple load balancing algorithms (e.g., round-robin, weighted round-robin, least connections) to intelligently distribute requests based on backend server health and load conditions.
-* **Health Checking**: Built-in health check mechanism that regularly monitors backend server availability, automatically removes unhealthy servers to ensure service stability and reliability.
-* **Flexible Configuration**: Uses YAML configuration files for management, easy to configure and maintain. Supports dynamic configuration updates without service restart.
-* **Extensibility**: Modular design, easy to extend and customize. New functional modules can be added as needed, such as authentication, rate limiting, monitoring, etc.
-* **Easy Deployment**: Compiles into a single executable file for simple deployment. Supports Docker deployment.
+* **High Performance**: Leverages Go's efficient concurrency model for exceptional throughput and low latency
+* **Intelligent Load Balancing**: Multiple algorithms including round-robin, weighted round-robin, and least connections
+* **Active Health Monitoring**: Automatic detection and removal of unhealthy backends
+* **Dynamic Configuration**: Hot-reload YAML configuration without downtime
+* **Extensible Architecture**: Modular design for custom middleware (authentication, rate limiting, etc.)
+* **Observability**: Built-in metrics and OpenTelemetry integration
+* **Cloud-Native**: Container-ready with Docker support
 
-## Quick Start
+## Getting Started
 
 ### Prerequisites
 
-* Go 1.22.5 or higher
+* Go 1.22.5+
 
 ### Installation
 
-1. **Clone Repository:**
-
-    ```bash
-    git clone https://github.com/rust17/nexus.git
-    cd nexus
-    ```
-
-2. **Build Project:**
-
-    ```bash
-    go build -o nexus cmd/main.go
-    ```
-
-    This will generate an executable file `nexus` in the current directory.
+```bash
+git clone https://github.com/rust17/nexus.git
+cd nexus
+go build -o nexus cmd/main.go
+```
 
 ### Configuration
 
-1. **Copy Configuration File:**
+1. Copy the sample config:
+```bash
+cp configs/config.yaml ./config.yaml
+```
 
-    Copy the `configs/config.yaml` file to the directory where you want to run `nexus`, such as the current directory.
-
-    ```bash
-    cp configs/config.yaml ./config.yaml
-    ```
-
-2. **Edit Configuration File:**
-
-    Open the `config.yaml` file and modify the configuration according to your needs. For detailed configuration explanation, refer to the [Configuration Details](#configuration-details) section.
-
-    ```yaml
-    # config.yaml example
-
-    listen_address: ":8080"  # listening address
-    services:
-      - name: "api-service"
-        balancer_type: "round_robin"
-        servers:
-          - address: "http://localhost:8081"
-          - address: "http://localhost:8082"
-    routes:
-      - name: user_route
-        match:
-          path: "/api/v1/users/*"  # Path wildcard
-        service: api-service      # Associated backend service
-    ```
+2. Edit `config.yaml`:
+```yaml
+listen_address: ":8080"
+services:
+  - name: "api-service"
+    balancer_type: "round_robin"
+    servers:
+      - address: "http://localhost:8081"
+      - address: "http://localhost:8082"
+routes:
+  - name: user_route
+    match:
+      path: "/api/v1/users/*"
+    service: api-service
+```
 
 ### Running
 

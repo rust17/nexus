@@ -83,7 +83,7 @@ func (n *node) search(req *http.Request) *routeInfo {
 
 	if path == "/" {
 		if n.isEnd {
-			return n.findMatchingRoute(req)
+			return n.findMatchingRoute(req, nil)
 		}
 		return nil
 	}
@@ -94,7 +94,7 @@ func (n *node) search(req *http.Request) *routeInfo {
 	}
 
 	// Then try wildcard match
-	return n.searchWildcardPath(path)
+	return n.searchWildcardPath(path, req)
 }
 
 // searchExactPath Try exact match path
@@ -117,14 +117,14 @@ func (n *node) searchExactPath(path string, req *http.Request) *routeInfo {
 	}
 
 	if current.isEnd {
-		return current.findMatchingRoute(req)
+		return current.findMatchingRoute(req, nil)
 	}
 
 	return nil
 }
 
 // searchWildcardPath Try wildcard match path
-func (n *node) searchWildcardPath(path string) *routeInfo {
+func (n *node) searchWildcardPath(path string, req *http.Request) *routeInfo {
 	// Get all possible wildcard routes
 	wildcardRoutes := make([]*routeInfo, 0)
 
@@ -149,6 +149,11 @@ func (n *node) searchWildcardPath(path string) *routeInfo {
 					bestMatch = info
 				}
 			}
+		}
+
+		// If the path is "*", find the matching route from other conditions
+		if routePath == "*" {
+			bestMatch = n.findMatchingRoute(req, wildcardRoutes)
 		}
 	}
 
@@ -178,13 +183,17 @@ func (n *node) collectWildcardRoutes(currentPath string, routes *[]*routeInfo) {
 }
 
 // findMatchingRoute Find matching route information
-func (n *node) findMatchingRoute(req *http.Request) *routeInfo {
-	// If there is only one route information, return directly
-	if len(n.routeInfos) == 1 {
-		return n.routeInfos[0]
+func (n *node) findMatchingRoute(req *http.Request, routes []*routeInfo) *routeInfo {
+	if len(routes) == 0 {
+		routes = n.routeInfos
 	}
 
-	for _, info := range n.routeInfos {
+	// If there is only one route information, return directly
+	if len(routes) == 1 {
+		return routes[0]
+	}
+
+	for _, info := range routes {
 		if matchRouteInfo(info, req) {
 			return info
 		}

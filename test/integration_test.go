@@ -109,8 +109,10 @@ func TestIntegration(t *testing.T) {
 
 			// Initialize health checker
 			healthChecker := healthcheck.NewHealthChecker(
+				true,
 				cfg.GetHealthCheckConfig().Interval,
 				cfg.GetHealthCheckConfig().Timeout,
+				"health",
 			)
 
 			for _, server := range tc.servers {

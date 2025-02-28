@@ -68,8 +68,10 @@ func runProxyBenchmark(b *testing.B, config benchmarkConfig) {
 	var healthChecker *healthcheck.HealthChecker
 	if config.EnableHealthCheck {
 		healthChecker = healthcheck.NewHealthChecker(
+			true,
 			config.HealthCheckInterval,
 			config.HealthCheckTimeout,
+			"health",
 		)
 		for _, backend := range backends {
 			healthChecker.AddServer(backend.URL)

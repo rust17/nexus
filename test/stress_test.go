@@ -209,7 +209,7 @@ func createTestBackends(t *testing.T, count int, delay time.Duration) []*httptes
 
 // initHealthChecker initializes and starts health checker
 func initHealthChecker(t *testing.T, backends []*httptest.Server) *healthcheck.HealthChecker {
-	healthChecker := healthcheck.NewHealthChecker(1*time.Second, 500*time.Millisecond)
+	healthChecker := healthcheck.NewHealthChecker(true, 1*time.Second, 500*time.Millisecond, "health")
 	for _, backend := range backends {
 		healthChecker.AddServer(backend.URL)
 	}
